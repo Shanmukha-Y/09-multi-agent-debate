@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
@@ -153,6 +154,15 @@ def cmd_list(args: argparse.Namespace) -> None:
 
 
 def cmd_bench(args: argparse.Namespace) -> None:
+    # bench/ is a repo-root sibling of src/, not part of the installed
+    # `debate` package, so it's only importable once the repo root is on
+    # sys.path. That's implicit when running `uv run python ...` from the
+    # repo root, but NOT when running the installed `debate` console-script
+    # directly (its sys.path[0] is the script's own directory) — so add it
+    # explicitly rather than relying on how the caller happened to invoke us.
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
     from bench.run_bench import main as bench_main
 
     bench_main(args)

@@ -6,6 +6,7 @@ __pycache__/
 *.egg-info/
 uv.lock.bak
 debates.db
-bench/results/*.json
-!bench/results/.gitkeep
 .DS_Store
+# bench/results/*.json is intentionally NOT ignored: the committed subset
+# bench run is evidence for the readme's accuracy/cost table. Scratch runs
+# during development are just not `git add`ed.
