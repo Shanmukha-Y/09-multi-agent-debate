@@ -1,0 +1,357 @@
+<title>Multi-Agent Debate System</title>
+<meta name="description" content="Three same-model reasoning personas debate, a rubric critic scores anonymized proposals, deterministic vote math picks a winner, and an aggregator reports confidence with an honest dissent appendix.">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-alt: #f6f7f9;
+    --text: #1a1d23;
+    --text-dim: #5b6270;
+    --border: #e2e5ea;
+    --accent: #3454d1;
+    --accent-soft: #eef1fd;
+    --good: #1a7f4e;
+    --good-soft: #e9f7f0;
+    --warn: #9a6300;
+    --warn-soft: #fdf3e0;
+    --bad: #b3261e;
+    --bad-soft: #fbeaea;
+    --code-bg: #f0f1f4;
+    --mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --bg-alt: #1c1f26;
+      --text: #eef0f4;
+      --text-dim: #9aa2b1;
+      --border: #2c313c;
+      --accent: #7c96f5;
+      --accent-soft: #232a42;
+      --good: #57c98a;
+      --good-soft: #16281f;
+      --warn: #e0ac4a;
+      --warn-soft: #2c2312;
+      --bad: #e57b74;
+      --bad-soft: #2c1717;
+      --code-bg: #1c1f26;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a; --bg-alt: #1c1f26; --text: #eef0f4; --text-dim: #9aa2b1;
+    --border: #2c313c; --accent: #7c96f5; --accent-soft: #232a42;
+    --good: #57c98a; --good-soft: #16281f; --warn: #e0ac4a; --warn-soft: #2c2312;
+    --bad: #e57b74; --bad-soft: #2c1717; --code-bg: #1c1f26;
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff; --bg-alt: #f6f7f9; --text: #1a1d23; --text-dim: #5b6270;
+    --border: #e2e5ea; --accent: #3454d1; --accent-soft: #eef1fd;
+    --good: #1a7f4e; --good-soft: #e9f7f0; --warn: #9a6300; --warn-soft: #fdf3e0;
+    --bad: #b3261e; --bad-soft: #fbeaea; --code-bg: #f0f1f4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.4rem; margin-top: 3rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  h3 { font-size: 1.1rem; margin-top: 2rem; color: var(--text); }
+  p, li { color: var(--text); }
+  .subtitle { color: var(--text-dim); font-size: 1.1rem; margin-top: 0; }
+  .tagline {
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    padding: 1rem 1.25rem;
+    border-radius: 6px;
+    margin: 1.5rem 0;
+    font-size: 1.02rem;
+  }
+  code, pre {
+    font-family: var(--mono);
+    font-size: 0.88rem;
+  }
+  code {
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 1rem 1.25rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+  }
+  pre code { background: none; padding: 0; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1.25rem 0;
+    font-size: 0.92rem;
+    overflow-x: auto;
+    display: block;
+  }
+  table.fixed { display: table; }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.55rem 0.75rem;
+    text-align: left;
+  }
+  th { background: var(--bg-alt); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin: 1.5rem 0;
+    font-size: 0.85rem;
+  }
+  .flow .step {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.9rem;
+    white-space: nowrap;
+  }
+  .flow .arrow { color: var(--text-dim); }
+  .pill {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .pill.good { background: var(--good-soft); color: var(--good); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.bad { background: var(--bad-soft); color: var(--bad); }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    margin: 1.25rem 0;
+    background: var(--bg-alt);
+  }
+  .card h4 { margin-top: 0; }
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  @media (max-width: 640px) {
+    .grid2 { grid-template-columns: 1fr; }
+  }
+  .decision-box {
+    border: 1px solid var(--warn);
+    background: var(--warn-soft);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin: 1.5rem 0;
+  }
+  .decision-box h4 { margin-top: 0; color: var(--warn); }
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.85rem;
+  }
+  .toc { columns: 2; font-size: 0.92rem; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  a { color: var(--accent); }
+</style>
+
+<h1>Multi-Agent Debate System</h1>
+<p class="subtitle">Three copies of the same 9B model, three different reasoning procedures, one anonymized critic, deterministic vote math, and an honest dissent appendix.</p>
+
+<div class="tagline">
+  <strong>The claim this project makes:</strong> orchestration alone — no bigger model, no more parameters — produces a measurable accuracy gain over a single call to the same model. Every proposer, the critic, and the aggregator all run <code>qwen3.5:9b</code> on the same local Ollama server; the only things that differ are system prompt and temperature.
+</div>
+
+<nav class="toc">
+  <a href="#architecture">Architecture</a>
+  <a href="#diversity">Why same-model diversity is real</a>
+  <a href="#auditability">Anonymized critic + deterministic vote</a>
+  <a href="#framework">Framework decision: ag2 vs. hand-rolled</a>
+  <a href="#cost">The honest cost story</a>
+  <a href="#bench">Bench results</a>
+  <a href="#install">Install &amp; run</a>
+  <a href="#demo">Demo walkthrough</a>
+  <a href="#testing">Testing strategy</a>
+  <a href="#structure">File structure</a>
+</nav>
+
+<h2 id="architecture">Architecture</h2>
+<p>One debate is a fixed pipeline, run strictly sequentially against a shared local Ollama server (see <a href="#framework">framework decision</a> for why sequential, not <code>asyncio.gather</code>):</p>
+
+<div class="flow">
+  <div class="step">Question</div>
+  <span class="arrow">&rarr;</span>
+  <div class="step">3 proposers (Analyst / Skeptic / Creative)</div>
+  <span class="arrow">&rarr;</span>
+  <div class="step">Critic scores, anonymized A/B/C</div>
+  <span class="arrow">&rarr;</span>
+  <div class="step">Rebuttal round</div>
+  <span class="arrow">&rarr;</span>
+  <div class="step">Critic re-scores</div>
+  <span class="arrow">&rarr;</span>
+  <div class="step">Deterministic vote</div>
+  <span class="arrow">&rarr;</span>
+  <div class="step">Aggregator: answer + confidence + dissent</div>
+</div>
+
+<p>Every arrow in that pipeline is a validated Pydantic message, not free text — <code>Proposal</code>, <code>Critique</code>, <code>Rebuttal</code>, <code>FinalVerdict</code> (see <code>src/debate/messages.py</code>). Every LLM call goes through a JSON-mode request plus a one-shot validate/repair retry (<code>src/debate/structured.py</code>): if the model's first attempt fails schema validation, the retry prompt includes the bad output and the exact field errors, which is what keeps a 9B model's shaky first-try JSON compliance from becoming free-text soup between stages. This is the same pattern project-01 (Structured Output Agent) established — a lesson pulled forward from project-05, where letting agents pass prose between stages let small errors compound silently.</p>
+
+<table>
+  <tr><th>Module</th><th>Responsibility</th></tr>
+  <tr><td><code>personas.py</code></td><td>Three proposer configs — system prompt + temperature, nothing else differs</td></tr>
+  <tr><td><code>messages.py</code></td><td>Every inter-agent message as a Pydantic schema</td></tr>
+  <tr><td><code>structured.py</code></td><td>JSON-mode call + validate/repair retry loop, shared by every agent role</td></tr>
+  <tr><td><code>critic.py</code></td><td>Anonymizes proposals to A/B/C, scores against the versioned rubric, never proposes</td></tr>
+  <tr><td><code>voting.py</code></td><td>Pure-Python scoring math: critic score &times; agreement bonus, clear-winner/split threshold</td></tr>
+  <tr><td><code>aggregator.py</code></td><td>Deterministic answer/confidence/dissent, one LLM call for prose only</td></tr>
+  <tr><td><code>debate.py</code></td><td>Orchestrates the pipeline above, sequential, hard-capped at 2 rounds</td></tr>
+  <tr><td><code>arena.py</code></td><td>Baseline arms: single-shot and self-consistency, for the bench</td></tr>
+  <tr><td><code>store.py</code></td><td>SQLite transcript persistence + JSON export for replay</td></tr>
+  <tr><td><code>cli.py</code></td><td><code>debate ask</code>, <code>debate replay</code>, <code>debate bench</code></td></tr>
+</table>
+
+<h2 id="diversity">Why same-model diversity is real, not cosmetic</h2>
+<p>It would be easy to fake diversity with three system prompts that just say "be an analyst" / "be a skeptic" / "be creative" and call it a day — that's a costume, and a 9B model asked to role-play a costume mostly produces the same reasoning with different adjectives sprinkled in. <code>personas.py</code> avoids this by giving each persona a <em>mandatory reasoning procedure</em>, not a personality:</p>
+
+<div class="grid2">
+  <div class="card">
+    <h4>Analyst (t=0.3)</h4>
+    <p>Restate the question &rarr; list every given constraint &rarr; numbered steps with explicit arithmetic &rarr; answer last. Forced to do the arithmetic instead of pattern-matching to an intuitive response.</p>
+  </div>
+  <div class="card">
+    <h4>Skeptic (t=0.7)</h4>
+    <p>Identify the tempting intuitive answer first &rarr; explicitly re-check it against every stated constraint &rarr; hunt for hidden assumptions or edge cases &rarr; only then commit. This is the role that catches the bat-and-ball trap.</p>
+  </div>
+  <div class="card">
+    <h4>Creative (t=1.0)</h4>
+    <p>Generate at least two structurally different approaches before picking one &rarr; state why the chosen approach won &rarr; work it through. Exists because the first angle of attack isn't always the right one.</p>
+  </div>
+</div>
+
+<p>Because the procedure is mandatory (spelled out as numbered steps in the system prompt, not a vibe), the three transcripts genuinely diverge in <em>how</em> they got to an answer, which is exactly the raw material the critic and rebuttal round need to work with. Temperature is varied on top of this for good measure, but the procedure difference is doing most of the work — you can see this directly in a transcript: the Skeptic's reasoning field explicitly re-derives and checks the "$0.10" trap even when it ends up agreeing with the Analyst, while the Analyst's reasoning field never mentions the trap at all.</p>
+
+<h2 id="auditability">Anonymized critic + deterministic vote math</h2>
+<p>Two deliberate constraints keep the outcome auditable rather than "trust the LLM one more time":</p>
+
+<h3>The critic never sees persona identity</h3>
+<p><code>critic.py</code> maps persona names to letters (<code>Analyst&rarr;A, Skeptic&rarr;B, Creative&rarr;C</code>, stable within a debate) before building the critic prompt, and the critic system prompt only ever refers to "Proposal A/B/C." This is a bias control: a critic that knows "this is the Creative persona's answer" is primed to expect — and either forgive or over-discount — unconventional reasoning. Role separation is structural, not a prompt request: <code>critic.py</code> has no code path that calls a proposer persona, so the critic <em>cannot</em> propose an answer even if a prompt-injected question tried to talk it into one.</p>
+
+<h3>The vote is arithmetic, not another LLM call</h3>
+<p><code>voting.py</code> computes <code>score = critic_total &times; agreement_multiplier</code> where <code>critic_total</code> is the sum of the rubric's three 1-10 dimensions and <code>agreement_multiplier</code> rewards independent corroboration from other proposers (up to +20% for unanimous agreement). A "clear winner" is a top score that leads its nearest <em>disagreeing</em> competitor by more than 15% — tied scores between proposers who gave the <em>same</em> answer are treated as consensus, not a split, since a literal tie only signals disagreement when it's a tie between different answers. This whole computation is pure Python: <code>tests/test_voting.py</code> exhaustively covers the threshold boundary, exact ties, and the unanimous-tie edge case, with zero network calls and zero LLM non-determinism to work around.</p>
+
+<h3>The aggregator can't blend answers into mush</h3>
+<p><code>aggregator.py</code> makes exactly one LLM call, and it produces only the <code>reasoning_summary</code> prose — the actual <code>answer</code>, <code>confidence</code>, <code>is_split</code> flag, and <code>dissent</code> list are all set in code from the vote's output <em>before</em> that call happens. The LLM cannot change which proposal won; if its summary call fails schema validation twice, the system falls back to a deterministic templated summary rather than losing an already-correct verdict to a formatting hiccup. When the vote doesn't clear the 15% threshold, the top scorer is still picked and attributed by name (never averaged with the runner-up into a hedge), <code>is_split</code> is set true, and every proposer whose final-round answer disagrees with the winner is grouped into a <code>DissentEntry</code> and appended to the verdict — dissent never silently disappears.</p>
+
+<h2 id="framework">Framework decision: ag2 investigation &rarr; hand-rolled fallback</h2>
+<div class="decision-box">
+  <h4>Decision: hand-rolled asyncio-free sequential orchestration, not ag2/AutoGen</h4>
+  <p>The spec called for AutoGen (ag2) with its Ollama/OpenAI-compatible client. Verification in M1 turned up two real problems within the first ~15 minutes, well inside the authorized 30-minute budget for a fallback:</p>
+  <ol>
+    <li><strong>The PyPI package named <code>ag2</code> is not AutoGen.</strong> It resolves to an unrelated, namespace-squatted project (modules like <code>a2a</code>, <code>mcp_ui</code>, <code>hitl</code> — agent-protocol tooling, not a multi-agent debate framework).</li>
+    <li><strong>The actual historical package, <code>pyautogen</code>, now installs Microsoft's rewritten <code>autogen-agentchat</code> / <code>autogen-core</code> stack (v0.4+).</strong> That rewrite dropped the classic <code>ConversableAgent</code> + <code>llm_config</code> API the spec's language assumed, in favor of an async actor-model runtime built around <code>ChatCompletionClient</code> objects — a different API surface entirely, designed for open-ended conversational agent chat.</li>
+  </ol>
+  <p>Even setting the version churn aside, this project's hardest requirements — anonymizing proposals before the critic sees them, computing the vote as deterministic arithmetic with zero LLM involvement, and assembling rebuttal-round prompts from a specific mix of the proposer's own critique plus anonymized peer critiques — are tight pipeline control flow, not conversational turn-taking. Every one of the five milestones would have meant fighting an actor-model abstraction built for a different shape of problem. The debate mechanics matter more than the framework badge, so the fallback path was taken immediately rather than spending the rest of the budget forcing a fit.</p>
+  <p>What was built instead (<code>client.py</code>, <code>structured.py</code>) is the same OpenAI-SDK-pointed-at-Ollama + Pydantic-validate-with-repair-retry pattern project-01 established for structured extraction — proven, small, and fully under this project's control. The architecture in the spec (fan-out &rarr; anonymized critique &rarr; rebuttal &rarr; re-critique &rarr; vote &rarr; aggregate, hard-capped at 2 rounds) is preserved exactly; only the plumbing underneath each call changed.</p>
+</div>
+
+<h2 id="cost">The honest cost story</h2>
+<p>A full debate makes roughly 9 sequential LLM calls per question: 3 proposals + 1 batched critique + 3 rebuttals + 1 batched re-critique + 1 aggregator summary. Self-consistency makes 3. Single-shot makes 1. That's the "&asymp;7&times; tokens" the spec asks to justify — actual per-question token multiples from this machine's runs are in the <a href="#bench">bench results</a> below.</p>
+<p>Debate is not free lunch, and the bench is built to say exactly when it's worth the multiple rather than assert it uniformly:</p>
+<ul>
+  <li><strong>Reasoning puzzles with a classic trap</strong> (bat-and-ball, lily pad) are where debate should earn its keep: a single Analyst call is exactly what falls into the intuitive-wrong-answer trap, and the Skeptic + critic + rebuttal loop is purpose-built to catch it.</li>
+  <li><strong>Fermi estimation questions</strong> have no single correct answer, only a plausible range — self-consistency's 3-sample majority is a much cheaper way to get a stable central estimate than a full debate, and the bench should show whether debate's extra cost buys any real accuracy over that cheaper baseline.</li>
+  <li><strong>Pros/cons and code-review verdicts</strong> are where a critic catching one wrong assumption (a missed cost term, a missed security issue) can flip a confident-but-wrong single-shot answer — but only if that assumption is the kind of thing the rubric's <code>correctness_risk</code> dimension actually surfaces.</li>
+</ul>
+
+<h2 id="bench">Bench results</h2>
+<p>30 questions, stratified 8 reasoning-puzzle / 8 estimation / 7 pros-cons / 7 code-review (<code>bench/questions.jsonl</code>), graded automatically — numeric answers against a reference range, decision/verdict answers against an instructed short label (e.g. "Job A" vs "Job B") rather than free-text keyword matching, to keep auto-grading honest without an LLM judge. Full command: <code>uv run python bench/run_bench.py</code>. The committed run below is the ~6-question stratified <strong>subset</strong> (2 reasoning-puzzle, 2 estimation, 1 pros-cons, 1 code-review — <code>bench/questions.jsonl</code> rows with <code>"subset": true</code>), run with:</p>
+<pre><code>uv run python bench/run_bench.py --subset</code></pre>
+
+<!-- BENCH_TABLE_PLACEHOLDER -->
+<p><em>Bench run pending — see the committed JSON in <code>bench/results/</code> for the raw per-question data once available.</em></p>
+
+<h2 id="install">Install &amp; run</h2>
+<pre><code># requires: Python 3.11+, uv, a local Ollama server with qwen3.5:9b pulled
+git clone &lt;this repo&gt; && cd 09-multi-agent-debate
+uv sync
+
+# sanity check the model is reachable
+curl -s http://localhost:11434/api/version
+
+# run the fast test suite (zero network, &lt;1s)
+uv run pytest
+
+# run the one live end-to-end test (needs Ollama, several minutes on a 9B model)
+uv run pytest -m integration tests/test_integration.py -v
+</code></pre>
+<p>Model name lives in exactly one place: <code>src/debate/config.py</code> (override with the <code>DEBATE_MODEL</code> env var). Ollama base URL, timeouts, round cap, and vote thresholds live there too.</p>
+
+<h2 id="demo">Demo walkthrough</h2>
+<h3>1. The money shot: visible error correction</h3>
+<pre><code>uv run debate ask "A bat and ball cost \$1.10 total; the bat costs \$1 more than the ball. What does the ball cost?" --live</code></pre>
+<p>Watch for: the Analyst proposing the intuitive-wrong $0.10 in round 1, the critic flagging low <code>correctness_risk</code> on that proposal, and the rebuttal round where the Analyst either revises to $0.05 or explicitly defends $0.10 against the critique. A committed sample transcript from a live run against this exact question is in <code>transcripts/</code> (see <code>debate replay</code> below).</p>
+
+<h3>2. Estimation with a range and confidence</h3>
+<pre><code>uv run debate ask "Estimate the number of piano tuners in Chicago." --live</code></pre>
+<p>Three genuinely different approaches (the Analyst's population/household chain, the Skeptic's check on tuning-frequency assumptions, the Creative's alternate framing) synthesized into one answer with a confidence score driven by how much the three actually agreed.</p>
+
+<h3>3. A genuine split</h3>
+<p>Any question close enough that the critic-weighted vote doesn't clear the 15% lead threshold — the CLI output includes <code>is_split: true</code> and the dissent appendix lists exactly who held out and what they proposed instead.</p>
+
+<h3>4. Replay a committed transcript</h3>
+<pre><code>uv run debate replay 1</code></pre>
+
+<h3>5. Bench table</h3>
+<pre><code>uv run debate bench --subset</code></pre>
+
+<h2 id="testing">Testing strategy</h2>
+<table>
+  <tr><th>Layer</th><th>File</th><th>What it proves</th><th>Network</th></tr>
+  <tr><td>Vote math</td><td><code>tests/test_voting.py</code></td><td>Winner/split threshold incl. exact ties and the unanimous-tie edge case, agreement clustering, confidence formula monotonicity</td><td>none</td></tr>
+  <tr><td>Schemas</td><td><code>tests/test_messages.py</code></td><td>Pydantic validation rejects malformed messages; the validate/repair retry loop actually repairs malformed and schema-invalid JSON via a scripted fake client</td><td>none</td></tr>
+  <tr><td>Critic</td><td><code>tests/test_critic.py</code></td><td>Anonymization never leaks persona names into the critic prompt; a hallucinated extra label is skipped rather than fatal; a missing label raises with an informative message</td><td>none</td></tr>
+  <tr><td>Full flow</td><td><code>tests/test_debate_mocked.py</code></td><td>Scripted Skeptic-catches-a-planted-flaw scenario flips the Analyst's own answer by the rebuttal round; a scripted persistent-holdout scenario produces a non-empty dissent appendix with strictly lower confidence than the unanimous case</td><td>none</td></tr>
+  <tr><td>Live</td><td><code>tests/test_integration.py</code></td><td>One real end-to-end debate against qwen3.5:9b completes and produces a structurally valid verdict</td><td>live, <code>@pytest.mark.integration</code>, excluded by default</td></tr>
+</table>
+<p>Default <code>uv run pytest</code> runs 70 tests in well under a second with zero network calls — every one of those tests would still pass if the Ollama server were offline.</p>
+
+<h2 id="structure">File structure</h2>
+<pre><code>09-multi-agent-debate/
+├── pyproject.toml
+├── readme.html
+├── src/debate/
+│   ├── config.py        # the one place the model name lives
+│   ├── personas.py       # Analyst / Skeptic / Creative
+│   ├── messages.py        # every inter-agent Pydantic schema
+│   ├── client.py           # OpenAI SDK pointed at Ollama
+│   ├── structured.py        # JSON-mode call + validate/repair retry
+│   ├── critic.py              # anonymized rubric scoring
+│   ├── voting.py                # deterministic vote math
+│   ├── aggregator.py             # answer/confidence/dissent + 1 summary call
+│   ├── debate.py                  # orchestrates the full pipeline
+│   ├── arena.py                    # single-shot / self-consistency baselines
+│   ├── store.py                     # SQLite transcript persistence
+│   └── cli.py                        # debate ask / replay / bench
+├── rubric/critic_rubric.md              # versioned scoring rubric
+├── bench/
+│   ├── questions.jsonl                    # 30 questions, 4 categories
+│   └── run_bench.py                        # 3-arm bench + calibration report
+├── tests/
+└── transcripts/                                # committed sample debates (incl. the live bat-and-ball run)
+</code></pre>
+
+<footer>
+  Project 09 of a portfolio series on agentic system design. Model: <code>qwen3.5:9b</code> via local Ollama, same weights for every role.
+</footer>
