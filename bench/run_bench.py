@@ -25,6 +25,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from rich.console import Console
 from rich.table import Table
@@ -91,8 +92,31 @@ def run_arm(arm: str, question_text: str) -> arena.ArenaResult:
     raise ValueError(f"unknown arm: {arm}")
 
 
-def run_bench(questions: list[dict], arms: tuple[str, ...] = ARMS, verbose: bool = True) -> list[QuestionResult]:
+CheckpointCallback = Callable[[list[QuestionResult], list[dict]], None]
+
+
+def run_bench(
+    questions: list[dict],
+    arms: tuple[str, ...] = ARMS,
+    verbose: bool = True,
+    on_result: CheckpointCallback | None = None,
+) -> tuple[list[QuestionResult], list[dict]]:
+    """Runs every (question, arm) pair. Never lets one bad call kill the run:
+    both the arena call itself AND grading are inside the same try/except,
+    so a malformed model output, a schema-validation exhaustion, or a
+    grading error on one arm is caught, recorded in `errors`, and the loop
+    moves on to the next arm.
+
+    If `on_result` is given, it fires after EVERY single arm attempt
+    (success or failure) with the results/errors accumulated so far. Callers
+    use this to checkpoint partial progress to disk after each of the ~18-90
+    individual LLM calls a bench run makes, not just once at the end -- a
+    multi-hour live bench run getting killed (crash, external signal, box
+    reboot, doesn't matter which) should never again be able to lose
+    everything completed up to that point.
+    """
     results: list[QuestionResult] = []
+    errors: list[dict] = []
     for i, q in enumerate(questions, 1):
         if verbose:
             console.print(f"[dim]({i}/{len(questions)}) {q['id']} [{q['category']}][/dim] {q['question'][:70]}...")
@@ -100,11 +124,17 @@ def run_bench(questions: list[dict], arms: tuple[str, ...] = ARMS, verbose: bool
             t0 = time.monotonic()
             try:
                 arena_result = run_arm(arm, q["question"])
-            except Exception as exc:  # noqa: BLE001 - one bad call shouldn't kill the whole bench run
-                console.print(f"  [red]{arm} failed on {q['id']}: {exc}[/red]")
+                elapsed = time.monotonic() - t0
+                correct = grade(arena_result.answer, q)
+            except Exception as exc:  # noqa: BLE001 - one bad arm shouldn't kill the whole bench run
+                elapsed = time.monotonic() - t0
+                errors.append({"question_id": q["id"], "arm": arm, "seconds": elapsed, "error": str(exc)})
+                if verbose:
+                    console.print(f"  [red]{arm} failed on {q['id']}: {exc}[/red]")
+                if on_result is not None:
+                    on_result(results, errors)
                 continue
-            elapsed = time.monotonic() - t0
-            correct = grade(arena_result.answer, q)
+
             results.append(
                 QuestionResult(
                     question_id=q["id"],
@@ -124,7 +154,9 @@ def run_bench(questions: list[dict], arms: tuple[str, ...] = ARMS, verbose: bool
                     f"    {arm:16s} {mark:20s} conf={arena_result.confidence:.2f} "
                     f"tokens={arena_result.total_tokens:5d} ({elapsed:.1f}s)"
                 )
-    return results
+            if on_result is not None:
+                on_result(results, errors)
+    return results, errors
 
 
 def summarize(results: list[QuestionResult], arms: tuple[str, ...] = ARMS) -> dict:
@@ -174,29 +206,46 @@ def print_summary_table(summary: dict) -> None:
             console.print(f"  {label}: n={c['n']}, accuracy={c['accuracy']:.0%}")
 
 
+def _write_checkpoint(
+    out_path: str, label: str, questions_path: str, n_questions: int, n_arms: int,
+    results: list[QuestionResult], errors: list[dict], status: str,
+) -> None:
+    payload = {
+        "label": label,
+        "questions_path": questions_path,
+        "n_questions": n_questions,
+        "status": status,  # "in_progress" until the run finishes, then "complete"
+        "n_arm_attempts_done": len(results) + len(errors),
+        "n_arm_attempts_total": n_questions * n_arms,
+        "summary": summarize(results) if results else {},
+        "results": [asdict(r) for r in results],
+        "errors": errors,
+    }
+    Path(out_path).write_text(json.dumps(payload, indent=2))
+
+
 def main(args: argparse.Namespace) -> None:
     questions = load_questions(Path(args.questions), subset_only=args.subset)
     label = "subset" if args.subset else "full"
     console.print(f"[bold]Running bench: {label} ({len(questions)} questions x {len(ARMS)} arms)[/bold]")
-
-    results = run_bench(questions)
-    summary = summarize(results)
-    print_summary_table(summary)
 
     out_path = args.out
     if out_path is None:
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         out_path = str(RESULTS_DIR / f"bench_{label}_{timestamp}.json")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
 
-    payload = {
-        "label": label,
-        "questions_path": args.questions,
-        "n_questions": len(questions),
-        "summary": summary,
-        "results": [asdict(r) for r in results],
-    }
-    Path(out_path).write_text(json.dumps(payload, indent=2))
+    def checkpoint(results: list[QuestionResult], errors: list[dict]) -> None:
+        _write_checkpoint(out_path, label, args.questions, len(questions), len(ARMS), results, errors, "in_progress")
+
+    results, errors = run_bench(questions, on_result=checkpoint)
+    summary = summarize(results)
+    print_summary_table(summary)
+    if errors:
+        console.print(f"\n[yellow]{len(errors)} arm attempt(s) failed and were skipped (see 'errors' in {out_path})[/yellow]")
+
+    _write_checkpoint(out_path, label, args.questions, len(questions), len(ARMS), results, errors, "complete")
     console.print(f"\n[dim]wrote results to {out_path}[/dim]")
 
 
