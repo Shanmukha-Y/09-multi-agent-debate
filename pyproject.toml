@@ -8,6 +8,7 @@ dependencies = [
     "openai>=1.30",
     "tenacity>=8.2",
     "rich>=13.7",
+    "httpx>=0.28.1",
 ]
 
 [project.scripts]

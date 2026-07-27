@@ -9,12 +9,27 @@ structured.py, not hidden in here.
 Every debate is 8-10 sequential calls against a *shared* local Ollama server
 (other builders are hitting it too), so timeouts here are generous and
 raw socket TimeoutError is caught alongside the SDK's own timeout exception.
+
+This module talks to Ollama through the `openai` SDK's OpenAI-compatible
+client (not the separate `ollama` PyPI package). Verified against the
+installed openai==2.48.0: its request path explicitly catches
+`httpx.TimeoutException` (the parent of `httpx.ReadTimeout` /
+`ConnectTimeout` / `WriteTimeout` / `PoolTimeout`) and re-raises it as
+`openai.APITimeoutError`, which is already in _TRANSPORT_EXCEPTIONS below —
+so this client is not exposed to the specific "httpx.ReadTimeout sails
+through uncaught because it isn't a TimeoutError subclass" failure mode
+that hits the `ollama` package's own client. httpx.TimeoutException is
+still caught explicitly here anyway, defensively, in case a future openai
+SDK version or an unusual code path (e.g. a timeout while streaming a
+response body after headers arrive) lets a raw httpx exception through
+unwrapped — see tests/test_client.py for the regression test.
 """
 
 from __future__ import annotations
 
 import socket
 
+import httpx
 import openai
 from tenacity import (
     retry,
@@ -30,6 +45,7 @@ _TRANSPORT_EXCEPTIONS = (
     openai.APITimeoutError,
     openai.InternalServerError,
     openai.RateLimitError,
+    httpx.TimeoutException,
     socket.timeout,
     TimeoutError,
 )
