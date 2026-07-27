@@ -1,0 +1,38 @@
+[project]
+name = "debate"
+version = "0.1.0"
+description = "Multi-Agent Debate System — same 9B model, three reasoning-style personas, a rubric critic, deterministic voting, and honest dissent reporting"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.6",
+    "openai>=1.30",
+    "tenacity>=8.2",
+    "rich>=13.7",
+]
+
+[project.scripts]
+debate = "debate.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/debate"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not integration'"
+timeout = 120
+markers = [
+    "integration: live tests that hit a running Ollama server",
+]
+
+[tool.uv]
+package = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-timeout>=2.4.0",
+]
