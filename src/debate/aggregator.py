@@ -2,13 +2,13 @@
 
 Everything that determines *correctness and auditability* — which answer
 wins, the confidence score, and whether dissent gets reported — is plain
-Python arithmetic in this module, not an LLM call. The one LLM call this
-module makes (`_write_summary`) only produces the narrative
-`reasoning_summary` prose; it cannot change the answer, the confidence
-number, or the dissent list, so an off-day from the model here degrades the
-write-up, never the correctness of the verdict. If that call fails schema
-validation entirely, we fall back to a deterministic summary rather than
-losing the (already-correct) verdict over a formatting hiccup.
+Python arithmetic in this module, not an LLM call. The one LLM call
+`synthesize()` makes only produces the narrative `reasoning_summary` prose;
+it cannot change the answer, the confidence number, or the dissent list, so
+an off-day from the model here degrades the write-up, never the correctness
+of the verdict. If that call fails schema validation entirely, we fall back
+to a deterministic summary (`_fallback_summary`) rather than losing the
+(already-correct) verdict over a formatting hiccup.
 
 Never averages contradictory answers into mush: the winner (by
 voting.score_round) is always picked and attributed by name. When the vote
