@@ -100,6 +100,8 @@ def run_bench(
     arms: tuple[str, ...] = ARMS,
     verbose: bool = True,
     on_result: CheckpointCallback | None = None,
+    initial_results: list[QuestionResult] | None = None,
+    initial_errors: list[dict] | None = None,
 ) -> tuple[list[QuestionResult], list[dict]]:
     """Runs every (question, arm) pair. Never lets one bad call kill the run:
     both the arena call itself AND grading are inside the same try/except,
@@ -114,13 +116,26 @@ def run_bench(
     multi-hour live bench run getting killed (crash, external signal, box
     reboot, doesn't matter which) should never again be able to lose
     everything completed up to that point.
+
+    `initial_results` / `initial_errors` seed a RESUME: any (question_id,
+    arm) pair already present in `initial_results` is skipped rather than
+    re-run (see load_checkpoint()). Pairs that previously failed
+    (`initial_errors`) are NOT skipped -- a transient failure deserves
+    another attempt, not a permanent skip, so they're carried forward into
+    the returned `errors` list but re-attempted like anything else.
     """
-    results: list[QuestionResult] = []
-    errors: list[dict] = []
+    results: list[QuestionResult] = list(initial_results or [])
+    errors: list[dict] = list(initial_errors or [])
+    already_done = {(r.question_id, r.arm) for r in results}
+
     for i, q in enumerate(questions, 1):
         if verbose:
             console.print(f"[dim]({i}/{len(questions)}) {q['id']} [{q['category']}][/dim] {q['question'][:70]}...")
         for arm in arms:
+            if (q["id"], arm) in already_done:
+                if verbose:
+                    console.print(f"  [dim]{arm} already completed for {q['id']}, skipping (resume)[/dim]")
+                continue
             t0 = time.monotonic()
             try:
                 arena_result = run_arm(arm, q["question"])
@@ -156,6 +171,14 @@ def run_bench(
                 )
             if on_result is not None:
                 on_result(results, errors)
+
+    # A pair that failed on a prior run but succeeded on this resume's retry
+    # now has both a stale error entry (carried forward from initial_errors)
+    # and a real result -- drop the stale entry so the final error list only
+    # ever reflects pairs that are STILL missing a result, not ones that
+    # eventually succeeded.
+    succeeded = {(r.question_id, r.arm) for r in results}
+    errors = [e for e in errors if (e["question_id"], e["arm"]) not in succeeded]
     return results, errors
 
 
@@ -206,6 +229,19 @@ def print_summary_table(summary: dict) -> None:
             console.print(f"  {label}: n={c['n']}, accuracy={c['accuracy']:.0%}")
 
 
+def load_checkpoint(out_path: str) -> tuple[list[QuestionResult], list[dict]]:
+    """Reconstruct (results, errors) from a previously-written checkpoint
+    file, for --resume. Returns ([], []) if the file doesn't exist yet --
+    resuming a run that never started is just starting it."""
+    path = Path(out_path)
+    if not path.exists():
+        return [], []
+    payload = json.loads(path.read_text())
+    results = [QuestionResult(**r) for r in payload.get("results", [])]
+    errors = list(payload.get("errors", []))
+    return results, errors
+
+
 def _write_checkpoint(
     out_path: str, label: str, questions_path: str, n_questions: int, n_arms: int,
     results: list[QuestionResult], errors: list[dict], status: str,
@@ -236,10 +272,22 @@ def main(args: argparse.Namespace) -> None:
         out_path = str(RESULTS_DIR / f"bench_{label}_{timestamp}.json")
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
 
+    initial_results: list[QuestionResult] = []
+    initial_errors: list[dict] = []
+    if getattr(args, "resume", False):
+        initial_results, initial_errors = load_checkpoint(out_path)
+        if initial_results or initial_errors:
+            console.print(
+                f"[dim]resuming from {out_path}: {len(initial_results)} result(s) already done, "
+                f"{len(initial_errors)} prior error(s) will be retried[/dim]"
+            )
+
     def checkpoint(results: list[QuestionResult], errors: list[dict]) -> None:
         _write_checkpoint(out_path, label, args.questions, len(questions), len(ARMS), results, errors, "in_progress")
 
-    results, errors = run_bench(questions, on_result=checkpoint)
+    results, errors = run_bench(
+        questions, on_result=checkpoint, initial_results=initial_results, initial_errors=initial_errors
+    )
     summary = summarize(results)
     print_summary_table(summary)
     if errors:
@@ -254,6 +302,10 @@ def _build_standalone_parser() -> argparse.ArgumentParser:
     parser.add_argument("--subset", action="store_true", help="run only the ~6-question stratified subset")
     parser.add_argument("--questions", type=str, default=str(QUESTIONS_PATH))
     parser.add_argument("--out", type=str, default=None)
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="skip (question, arm) pairs already completed in --out's existing checkpoint file",
+    )
     return parser
 
 

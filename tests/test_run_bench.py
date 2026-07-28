@@ -1,14 +1,16 @@
-"""Regression tests for a real incident: a live subset bench run was
-externally terminated partway through and lost all completed work because
-run_bench.py only wrote results to disk once, at the very end. Two things
-are tested here, no network:
+"""Regression tests for two real incidents on a live subset bench run that
+was externally terminated (twice) partway through:
 
-1. run_bench() never lets one bad (question, arm) attempt kill the loop --
-   both the arena call and grading are inside the same try/except, and a
-   raised exception is recorded in `errors` rather than propagating.
-2. The `on_result` checkpoint callback fires after EVERY arm attempt
-   (success or failure), so a caller writing it to disk each time means a
-   run that dies mid-way still has all completed work on disk, not none.
+1. run_bench.py only wrote results to disk once, at the very end -- fixed
+   with per-attempt checkpointing (`on_result` fires after every arm, a
+   grading exception is now caught alongside the arena call).
+2. Even with checkpointing, a killed run had no way to pick back up where
+   it left off short of re-running (and re-paying for) everything --
+   fixed with --resume: (question_id, arm) pairs already present in a
+   prior checkpoint's results[] are skipped, and pairs that previously
+   failed are retried rather than skipped.
+
+No network in any of these.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ import json
 import pytest
 
 import bench.run_bench as run_bench_module
-from bench.run_bench import grade, run_bench
+from bench.run_bench import QuestionResult, grade, load_checkpoint, run_bench
 
 
 QUESTIONS = [
@@ -155,3 +157,84 @@ def test_checkpoint_written_to_disk_reflects_progress_after_every_attempt(tmp_pa
     # proven by file_states_seen[0] == 1 above rather than 0.
     final = json.loads(out_path.read_text())
     assert len(final["results"]) == 2
+
+
+class TestResume:
+    def test_already_completed_pairs_are_skipped_not_rerun(self, monkeypatch):
+        call_log: list[tuple[str, str]] = []
+
+        def fake_run_arm(arm: str, question_text: str):
+            call_log.append((arm, question_text))
+            return FakeArenaResult(answer="4" if "2+2" in question_text else "6")
+
+        monkeypatch.setattr(run_bench_module, "run_arm", fake_run_arm)
+
+        # Pretend q01/single_shot already succeeded on a prior (killed) run.
+        prior_result = QuestionResult(
+            question_id="q01", category="reasoning_puzzle", arm="single_shot",
+            answer="4", confidence=0.9, correct=True, tokens=100, calls=1, seconds=5.0,
+        )
+
+        results, errors = run_bench(
+            QUESTIONS, arms=("single_shot", "self_consistency"), verbose=False,
+            initial_results=[prior_result],
+        )
+
+        # q01/single_shot must NOT have been called again.
+        assert ("single_shot", "2+2?") not in call_log
+        # Everything else still ran: q01/self_consistency, q02/single_shot, q02/self_consistency.
+        assert len(call_log) == 3
+        # The final results include the carried-forward prior result plus the 3 new ones.
+        assert len(results) == 4
+        assert prior_result in results
+
+    def test_previously_failed_pairs_are_retried_not_skipped(self, monkeypatch):
+        call_log: list[tuple[str, str]] = []
+
+        def fake_run_arm(arm: str, question_text: str):
+            call_log.append((arm, question_text))
+            return FakeArenaResult(answer="4" if "2+2" in question_text else "6")
+
+        monkeypatch.setattr(run_bench_module, "run_arm", fake_run_arm)
+
+        prior_error = {"question_id": "q01", "arm": "single_shot", "seconds": 3.0, "error": "simulated prior failure"}
+
+        results, errors = run_bench(
+            QUESTIONS, arms=("single_shot",), verbose=False, initial_errors=[prior_error],
+        )
+
+        # The previously-failed pair WAS retried (unlike a succeeded pair).
+        assert ("single_shot", "2+2?") in call_log
+        # It succeeded this time, so the stale error entry is dropped from
+        # the final errors list -- a retry that succeeds must not still be
+        # reported as a failure.
+        assert prior_error not in errors
+        assert any(r.question_id == "q01" and r.arm == "single_shot" for r in results)
+
+    def test_load_checkpoint_reconstructs_results_and_errors(self, tmp_path):
+        out_path = tmp_path / "checkpoint.json"
+        out_path.write_text(
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "question_id": "q01", "category": "reasoning_puzzle", "arm": "single_shot",
+                            "answer": "4", "confidence": 0.9, "correct": True, "tokens": 100, "calls": 1, "seconds": 5.0,
+                        }
+                    ],
+                    "errors": [{"question_id": "q02", "arm": "debate", "seconds": 1.0, "error": "boom"}],
+                }
+            )
+        )
+
+        results, errors = load_checkpoint(str(out_path))
+
+        assert len(results) == 1
+        assert isinstance(results[0], QuestionResult)
+        assert results[0].question_id == "q01"
+        assert errors == [{"question_id": "q02", "arm": "debate", "seconds": 1.0, "error": "boom"}]
+
+    def test_load_checkpoint_missing_file_returns_empty(self, tmp_path):
+        results, errors = load_checkpoint(str(tmp_path / "does_not_exist.json"))
+        assert results == []
+        assert errors == []

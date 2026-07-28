@@ -191,6 +191,10 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--subset", action="store_true", help="run only the ~6-question stratified subset")
     bench.add_argument("--questions", type=str, default="bench/questions.jsonl")
     bench.add_argument("--out", type=str, default=None)
+    bench.add_argument(
+        "--resume", action="store_true",
+        help="skip (question, arm) pairs already completed in --out's existing checkpoint file",
+    )
     bench.set_defaults(func=cmd_bench)
 
     return parser
