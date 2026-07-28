@@ -25,7 +25,7 @@ uv run pytest
 
 # One live debate
 uv run pytest -m integration tests/test_integration.py -v
-uv run debate ask "A bat and ball cost $1.10 total; the bat costs $1 more than the ball. What does the ball cost?" --live
+uv run debate ask 'A bat and ball cost $1.10 total; the bat costs $1 more than the ball. What does the ball cost?' --live
 
 # Resumable benchmark subset
 uv run python bench/run_bench.py --subset --out bench/results/subset_run.json
