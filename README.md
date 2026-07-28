@@ -1,39 +1,52 @@
 # Multi-Agent Debate System
 
-Three copies of the same 9B model debate under an anonymized critic and deterministic vote math, testing whether orchestration alone — no bigger model — buys a measurable accuracy gain over a single call.
+Three structured instances of the same local 9B model debate under an anonymized critic and deterministic vote, testing whether orchestration alone can improve answer quality enough to justify its additional inference cost.
 
 ## What it does
 
-- Three proposer personas (Analyst, Skeptic, Creative) share one model (`qwen3.5:9b`) and differ only in system prompt and temperature — each is given a *mandatory reasoning procedure* (not a personality), so their transcripts genuinely diverge in how they reach an answer.
-- A critic scores proposals against a versioned rubric after they're relabeled A/B/C — persona names are never in its prompt, and it has no code path to propose an answer itself, so bias control is structural, not a prompt request.
-- A rebuttal round lets proposers respond to anonymized peer critiques before a final re-score.
-- The winner is picked by pure-Python arithmetic (`critic_total × agreement_multiplier`), with a >15% lead over the nearest *disagreeing* competitor required for a clear winner — zero LLM involvement, zero non-determinism to work around in tests.
-- The aggregator makes exactly one LLM call, for prose only; the winning answer, confidence, split flag, and dissent list are all decided by code before that call, and a failed summary falls back to a deterministic template rather than losing a correct verdict.
-- A 3-arm bench (single-shot, self-consistency, debate) grades against reference ranges or instructed labels, not an LLM judge, with per-attempt checkpointing and `--resume`.
+- Uses three proposer procedures—Analyst, Skeptic, and Creative—on the same `qwen3.5:9b` model. They differ in mandatory reasoning procedure and temperature rather than fictional personality alone.
+- Relabels proposals as A/B/C before criticism. The critic never receives persona names and has no code path for proposing its own answer.
+- Runs one rebuttal round so proposers can revise or defend their position after receiving anonymized feedback.
+- Selects the winner through pure-Python score and agreement arithmetic. The aggregator receives a verdict already fixed by code and generates prose only.
+- Requires a greater-than-15% lead over the nearest disagreeing candidate for a clear winner and retains explicit dissent when the vote is split.
+- Benchmarks single-shot, self-consistency, and debate arms against reference labels or ranges rather than another LLM judge.
+- Checkpoints every arm attempt and supports `--resume`, preserving completed work across interrupted multi-hour runs.
+- Normalizes a common local-model schema variation where `reasoning` arrives as a non-empty list of strings, joining the steps without paying for a repair call. Other malformed shapes still fail validation.
 
 ## Quick start
 
-```
-# requires: Python 3.11+, uv, a local Ollama server with qwen3.5:9b pulled
+```bash
 uv sync
-curl -s http://localhost:11434/api/version   # sanity check the model is reachable
+ollama pull qwen3.5:9b
+curl -s http://localhost:11434/api/version
 
-uv run pytest                                 # 70 tests, zero network, <1s
-uv run pytest -m integration tests/test_integration.py -v   # one live end-to-end debate, needs Ollama
+# Fast offline suite
+uv run pytest
 
-uv run debate ask "A bat and ball cost \$1.10 total; the bat costs \$1 more than the ball. What does the ball cost?" --live
+# One live debate
+uv run pytest -m integration tests/test_integration.py -v
+uv run debate ask 'A bat and ball cost $1.10 total; the bat costs $1 more than the ball. What does the ball cost?' --live
+
+# Resumable benchmark subset
 uv run python bench/run_bench.py --subset --out bench/results/subset_run.json
-uv run python bench/run_bench.py --subset --resume --out bench/results/subset_run.json   # picks up where a killed run left off
+uv run python bench/run_bench.py --subset --resume --out bench/results/subset_run.json
 ```
 
-`debateRender.html` is a static rendered view of the committed live bat-and-ball transcript — open it directly to see the debate play out round by round without running anything.
+Open [`debateRender.html`](debateRender.html) for a static rendering of the committed live transcript.
+
+## Interpretation boundary
+
+Three copies of one model are **correlated samples**, not independent experts. Shared pretraining, prompting conventions, and failure modes can produce confident consensus around the same wrong answer. Anonymization reduces one source of critic bias; it does not make the critic objective. Agreement bonuses and deterministic voting make the mechanism reproducible, not necessarily correct.
+
+The committed benchmark is a small, interrupted subset with unequal completion counts across arms. Its completed debate cases should not be compared naively with baseline accuracy because long single-shot generations timed out more often. The recorded 7.97× token multiple is a real cost observation for that run; it is not evidence that debate has a favorable quality-per-dollar trade-off in general.
 
 ## Learnings
 
-- **ag2 turned out to be two different frameworks under one name.** The spec called for AutoGen (ag2) with an Ollama-compatible client. The PyPI package literally named `ag2` is an unrelated namespace-squatted agent-protocol project (`a2a`, `mcp_ui`, `hitl` modules, nothing to do with debate). The real historical package, `pyautogen`, now installs Microsoft's rewritten `autogen-agentchat`/`autogen-core` (v0.4+), an async actor-model runtime that dropped the classic `ConversableAgent` + `llm_config` API entirely. Both problems surfaced within ~15 minutes of the authorized 30-minute investigation budget, and this project's hardest requirements — anonymizing proposals before the critic sees them, deterministic zero-LLM vote math, rebuttal prompts assembled from a specific mix of own-critique plus anonymized peer critiques — are tight pipeline control flow, not conversational turn-taking, so the fallback to a hand-rolled OpenAI-SDK-pointed-at-Ollama pipeline (the same pattern project-01 established) was taken immediately rather than fighting an actor-model abstraction for five milestones.
-- **A literal score tie needed a second check to mean the right thing.** The vote logic initially risked treating any tied top score as a split. It was corrected so a tie only signals disagreement when it's a tie between proposers who gave *different* answers — a tie between proposers who agree is unanimous consensus, not a split. `tests/test_voting.py` covers the threshold boundary, exact ties, and this unanimous-tie edge case explicitly.
-- **Timeouts tuned for typical call length quietly favor debate for the wrong reason.** At this server's measured ~65-68 tok/s, qwen3.5:9b's persona-mandated step-by-step prompting drives open-ended Fermi-estimate completions past 10,000+ decoded tokens (observed up to ~11,300 on one call) — enough alone to blow a 180s ceiling before queueing or prompt processing. A live subset run against an otherwise idle server timed out 7 of 18 attempts this way, every one an estimation question in a baseline arm. The ceiling was raised to 600s with that measured rationale recorded in `config.py`. The deeper lesson: comparing arms with different call-count shapes at a fixed timeout will make the arm with many short calls (debate) look artificially more robust than the arm with one long call (single-shot/self-consistency) — not because it reasons better, but because its call shape survives timeouts better. The bench table's own 100%-completed accuracy for debate is flagged as survivor-biased for exactly this reason, not presented as a clean win.
-- **Retry layers stack multiplicatively, not additively.** Three independent retry layers exist (transport retries, schema-repair retries, self-consistency sampling); worst case for one arm on one question is 3 samples × 2 schema attempts × 3 transport retries × 600s — a theoretical 10,800s if every layer maxes out simultaneously, despite no single layer looking unreasonable alone. None were designed with the others in mind; a shared wall-clock budget per logical call is flagged as future work instead of three independently generous ceilings.
-- **Two external process kills, zero lost results.** A multi-hour live bench run was killed twice by what the timing evidence points to as the session's own background-task lifecycle (not a code bug), plus one deliberate operator wall-clock cap. Per-attempt checkpointing (`on_result` firing after every arm attempt, success or failure) and `--resume` meant all three interruptions cost only the one in-flight attempt each — the committed subset run reports its own status as `"capped"` with a `capped_note`, honestly: 18 of 18 pairs attempted, 11 completed, 7 recorded (not silently dropped) failures, most of them the same `reasoning` field arriving as a JSON array instead of a string.
+- **The framework name in the original plan was ambiguous.** The `ag2` package on PyPI was unrelated to the expected classic AutoGen API, while current Microsoft AutoGen had moved to a different actor-style architecture. A hand-rolled pipeline gave tighter control over anonymization, rebuttal construction, and deterministic voting.
+- **A tied score is not automatically a split.** A tie between proposals with the same answer is consensus; only tied top scores attached to different answers indicate disagreement.
+- **Per-call timeouts biased the comparison.** Long baseline completions exceeded the ceiling more often than debate's larger number of shorter calls. Completed-case accuracy therefore has survivor bias.
+- **Retry layers multiply.** Transport retries, schema repairs, and self-consistency samples can create a much larger worst-case wall time than any individual timeout suggests. A shared logical-call deadline remains follow-up work.
+- **A repeated schema failure is now handled without hiding the evidence.** The recorded run contains four failures where `Proposal.reasoning` was a JSON array. The message contract now losslessly joins non-empty string arrays and tests that the first attempt succeeds, but the historical benchmark file has not been rewritten or retroactively rescored.
+- **Checkpointing paid off.** Two external process terminations and one operator cap lost only the in-flight attempt because every completed arm was persisted.
 
-See `readme.html` for the full write-up, including the bench table, the measured 7.97x token-cost multiple against single-shot, and the live bat-and-ball transcript walkthrough.
+See [`readme.html`](readme.html) for the original methodology and benchmark artifact. The historical JSON/HTML results are intentionally unchanged; this root README is authoritative for the post-run schema-normalization fix and its limitations.
