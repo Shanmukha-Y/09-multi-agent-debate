@@ -181,6 +181,7 @@
   <a href="#framework">Framework decision: ag2 vs. hand-rolled</a>
   <a href="#cost">The honest cost story</a>
   <a href="#bench">Bench results</a>
+  <a href="#learnings">Learnings</a>
   <a href="#install">Install &amp; run</a>
   <a href="#demo">Demo walkthrough</a>
   <a href="#testing">Testing strategy</a>
@@ -276,11 +277,47 @@
 </ul>
 
 <h2 id="bench">Bench results</h2>
-<p>30 questions, stratified 8 reasoning-puzzle / 8 estimation / 7 pros-cons / 7 code-review (<code>bench/questions.jsonl</code>), graded automatically — numeric answers against a reference range, decision/verdict answers against an instructed short label (e.g. "Job A" vs "Job B") rather than free-text keyword matching, to keep auto-grading honest without an LLM judge. Full command: <code>uv run python bench/run_bench.py</code>. The committed run below is the ~6-question stratified <strong>subset</strong> (2 reasoning-puzzle, 2 estimation, 1 pros-cons, 1 code-review — <code>bench/questions.jsonl</code> rows with <code>"subset": true</code>), run with:</p>
-<pre><code>uv run python bench/run_bench.py --subset</code></pre>
+<p>30 questions, stratified 8 reasoning-puzzle / 8 estimation / 7 pros-cons / 7 code-review (<code>bench/questions.jsonl</code>), graded automatically — numeric answers against a reference range, decision/verdict answers against an instructed short label (e.g. "Job A" vs "Job B") rather than free-text keyword matching, to keep auto-grading honest without an LLM judge. Full command: <code>uv run python bench/run_bench.py</code>. The committed run below is the ~6-question stratified <strong>subset</strong> (2 reasoning-puzzle, 2 estimation, 1 pros-cons, 1 code-review — <code>bench/questions.jsonl</code> rows with <code>"subset": true</code>):</p>
+<pre><code>uv run python bench/run_bench.py --subset --out bench/results/subset_run.json
+# a killed or slow run resumes exactly where it left off, retrying only what failed:
+uv run python bench/run_bench.py --subset --resume --out bench/results/subset_run.json</code></pre>
 
-<!-- BENCH_TABLE_PLACEHOLDER -->
-<p><em>Bench run pending — see the committed JSON in <code>bench/results/</code> for the raw per-question data once available.</em></p>
+<p><strong>Honest status: capped, not complete.</strong> 18 of 18 (question, arm) pairs were attempted; 11 completed and 7 are recorded, named failures after one retry round at a raised, measured 600s per-call ceiling (see <a href="#learnings">Learnings</a> below) — the run was capped for wall-clock rather than pushed to a third retry round. The raw data, including every error message, is committed at <code>bench/results/subset_run.json</code> with <code>"status": "capped"</code> and a <code>"capped_note"</code> explaining exactly this.</p>
+
+<table>
+  <tr><th>Arm</th><th>Completed</th><th>Accuracy (of completed)</th><th>Total tokens</th><th>Avg tokens / completed question</th></tr>
+  <tr><td>single-shot</td><td>4 / 6</td><td>75% (3/4)</td><td>29,233</td><td>7,308</td></tr>
+  <tr><td>self-consistency</td><td>3 / 6</td><td>100% (3/3)</td><td>34,595</td><td>11,532</td></tr>
+  <tr><td>debate</td><td>4 / 6</td><td>100% (4/4)</td><td>233,065</td><td>58,266</td></tr>
+</table>
+
+<p>Two honest reads on this table, not the polished one a hand-picked run would give:</p>
+<ul>
+  <li><strong>The cost multiple lands almost exactly on the spec's own estimate.</strong> Debate's 58,266 avg tokens/question vs. single-shot's 7,308 is a <strong>7.97&times;</strong> multiple — the "&asymp;7&times; tokens" framing this readme opened with, now backed by a measured number instead of an assumption.</li>
+  <li><strong>Debate's 100% accuracy on completed questions is real but survivor-biased</strong> by the same failure pattern documented below: debate's individual calls are shorter (many short calls vs. baselines' few very long ones on estimation questions), so it disproportionately <em>survived</em> to produce a gradable answer on exactly the harder estimation questions where the baselines timed out or hit a schema failure. This is flagged, not hidden, in <a href="#learnings">Learnings</a> — a 4/4 and a 3/3 are too small a sample size to call a win on their own, and an apples-to-apples comparison needs the full 30-question run with every arm completing every question.</li>
+  <li>On the two reasoning-puzzle questions in the subset (bat-and-ball, lily pad), <strong>all three arms got 100% right</strong> — matching the honest live-run finding above that qwen3.5:9b's persona-mandated step-by-step reasoning routes around the classic trap even single-shot, on this model and this question class.</li>
+</ul>
+
+<h2 id="learnings">Learnings from actually running this bench live</h2>
+<p>This bench earned some real lessons that the mocked test suite couldn't have surfaced on its own:</p>
+<ol>
+  <li>
+    <strong>Naive per-call timeouts structurally bias baseline arms against debate on long-reasoning questions.</strong>
+    At this server's measured ~65-68 tok/s, qwen3.5:9b's persona-mandated "restate every constraint, show explicit steps" prompting drives single completions on open-ended Fermi-estimate questions past 10,000+ decoded tokens (observed up to ~11,300 on one call). A single-shot or self-consistency arm needs that ONE long call to survive intact; a debate arm's ~9 calls are individually much shorter (a proposal, a critique, a rebuttal), so any one call is far less likely to hit a fixed ceiling even though debate's <em>total</em> tokens are much higher. A bench comparing arms at a timeout tuned for typical call length, not worst-case call length, will make debate look artificially more robust than it is for the wrong reason — not because debate reasons better, but because its call shape survives timeouts better. The fix here was raising the ceiling to 600s with the measured rationale in <code>config.py</code>, but the deeper lesson is: <strong>any timeout comparison between arms with different call-count shapes needs a per-call budget wide enough that no arm's failure mode is "the clock," not "the model."</strong>
+  </li>
+  <li>
+    <strong>Stacked retry layers multiply worst-case wall-clock, not add.</strong>
+    This system has three independent retry layers: transport retries (tenacity, 3 attempts per call), schema-repair retries (2 attempts per logical proposal), and self-consistency's own sampling (3 independent calls). Worst case for a single self-consistency arm is <code>3 samples &times; 2 schema attempts &times; 3 transport retries &times; timeout</code> — at a 600s ceiling that's a theoretical 10,800s (3 hours) for one arm on one question if every layer maxes out simultaneously, even though no single layer looks unreasonable in isolation. None of this project's retry budgets were designed with the others in mind. Future work: retry budgets across layers should be a shared wall-clock budget (e.g. "this logical call gets at most 900s total, spend it however the layers need"), not three independently-generous ceilings that compound.
+  </li>
+  <li>
+    <strong>A recurring schema failure: the model sometimes emits <code>reasoning</code> as a JSON array of strings instead of one string.</strong>
+    4 of the 7 capped failures are the identical validation error: <code>Proposal.reasoning</code> arrives as <code>['Step 1: ...', 'Step 2: ...']</code> instead of a single string, because the persona prompts explicitly instruct "numbered steps," and the model's JSON-mode output sometimes reifies that instruction into actual JSON array structure rather than a string with embedded newlines. The validate/repair retry loop gives it one chance to self-correct and often doesn't get there in time. <strong>Known future work, not yet implemented:</strong> a Pydantic <code>field_validator</code> on <code>Proposal.reasoning</code> (and <code>Rebuttal.reasoning</code>) that coerces a list of strings into one joined string (e.g. <code>"\n".join(...)</code>) before validation fails, rather than only after — this is a pure data-shape normalization, not a model-behavior fix, and would likely eliminate this failure mode without touching a prompt.
+  </li>
+  <li>
+    <strong>Per-pair checkpointing and resume turned three separate disasters into non-events.</strong>
+    This one live bench run survived two external process terminations (session-lifecycle related, not code bugs — confirmed by a monitoring wait-loop dying at the exact same instant as the bench process itself) and one deliberate wall-clock cap by an operator, and lost zero completed work across all three. That's the entire practical argument for building <code>on_result</code> checkpointing and <code>--resume</code> as first-class parts of the bench runner rather than an afterthought: a multi-hour live-LLM bench run against a real, sometimes-flaky, sometimes-shared environment is not a script that gets one uninterrupted shot to succeed — assume it will be interrupted, and design the runner so an interruption costs at most the one in-flight attempt.
+  </li>
+</ol>
 
 <h2 id="install">Install &amp; run</h2>
 <pre><code># requires: Python 3.11+, uv, a local Ollama server with qwen3.5:9b pulled
@@ -299,9 +336,10 @@ uv run pytest -m integration tests/test_integration.py -v
 <p>Model name lives in exactly one place: <code>src/debate/config.py</code> (override with the <code>DEBATE_MODEL</code> env var). Ollama base URL, timeouts, round cap, and vote thresholds live there too.</p>
 
 <h2 id="demo">Demo walkthrough</h2>
-<h3>1. The money shot: visible error correction</h3>
+<h3>1. The bat-and-ball question, live</h3>
 <pre><code>uv run debate ask "A bat and ball cost \$1.10 total; the bat costs \$1 more than the ball. What does the ball cost?" --live</code></pre>
-<p>Watch for: the Analyst proposing the intuitive-wrong $0.10 in round 1, the critic flagging low <code>correctness_risk</code> on that proposal, and the rebuttal round where the Analyst either revises to $0.05 or explicitly defends $0.10 against the critique. A committed sample transcript from a live run against this exact question is in <code>transcripts/</code> (see <code>debate replay</code> below).</p>
+<p><strong>Honest result from the committed live run</strong> (<code>transcripts/bat_and_ball_live.json</code>, <code>qwen3.5:9b</code>, no cherry-picking): all three personas independently answered <strong>$0.05</strong> in round 1 — no error to correct. That's a real and useful data point, not an anticlimax: the Analyst's system prompt mandates "restate every constraint, show explicit arithmetic before answering," and on this run that alone was enough to route around the classic intuitive-$0.10 trap before the critic or the Skeptic ever had to intervene. The debate mechanism still did real work on top of that agreement, though — round 1 already produced a clear winner (100% lead ratio, unanimous), the rebuttal round ran anyway per the 2-round default (all three defended or reconfirmed $0.05, Creative explicitly revised its phrasing), and the final verdict landed on <strong>$0.05 at 0.81 confidence</strong> with zero dissent, driven by <code>correctness_risk</code> scores of 9-10/10 across the board and full peer agreement. The aggregator's actual generated summary: <em>"The winning answer of $0.05 was selected because the Critic confirmed its mathematical correctness via reductio ad absurdum and robust constraint verification... With no dissent from other proposers and strong scores for reasoning quality, it stands as the clear winner requiring no modification."</em></p>
+<p>The deterministic <em>error-correction</em> path — a proposer catching the $0.10 trap and flipping the Analyst's own answer by the rebuttal round — is exactly what <code>tests/test_debate_mocked.py::TestErrorCorrectionFlipsAnswer</code> demonstrates unconditionally with scripted agent outputs, since a live 9B model's first-try accuracy on a well-known riddle isn't something a demo should depend on to make its point. Between the two: the live run shows the persona design working (mandated reasoning procedures avoiding a known trap on their own), and the mocked test shows the debate mechanism working (catching and correcting a trap when a proposer does fall into it) — together they're the actual claim this project makes, not just one half of it.</p>
 
 <h3>2. Estimation with a range and confidence</h3>
 <pre><code>uv run debate ask "Estimate the number of piano tuners in Chicago." --live</code></pre>
@@ -311,7 +349,9 @@ uv run pytest -m integration tests/test_integration.py -v
 <p>Any question close enough that the critic-weighted vote doesn't clear the 15% lead threshold — the CLI output includes <code>is_split: true</code> and the dissent appendix lists exactly who held out and what they proposed instead.</p>
 
 <h3>4. Replay a committed transcript</h3>
-<pre><code>uv run debate replay 1</code></pre>
+<p><code>debate replay &lt;id&gt;</code> reads from the local SQLite store (<code>debates.db</code>), which is a runtime artifact, not committed — a fresh clone's database is empty until you run <code>debate ask</code> yourself. The committed artifact for the live bat-and-ball run is the standalone JSON snapshot at <code>transcripts/bat_and_ball_live.json</code> (written by <code>store.export_transcript_json</code>); inspect it directly, or reproduce the same debate into your own local store and replay it by id:</p>
+<pre><code>uv run debate ask "A bat and ball cost \$1.10 total; the bat costs \$1 more than the ball. What does the ball cost?"
+uv run debate replay 1</code></pre>
 
 <h3>5. Bench table</h3>
 <pre><code>uv run debate bench --subset</code></pre>

@@ -268,7 +268,14 @@ def _write_checkpoint(
         "label": label,
         "questions_path": questions_path,
         "n_questions": n_questions,
-        "status": status,  # "in_progress" until the run finishes, then "complete"
+        # "in_progress" until every (question, arm) pair has been attempted,
+        # then "complete". A run can also be wall-clock capped by an operator
+        # after one or more retry rounds still leave errored pairs -- that
+        # state is written by hand as status "capped" (with a "capped_note"
+        # explaining what's still outstanding and why), not by this function,
+        # since it's a deliberate operator decision rather than something the
+        # runner detects on its own.
+        "status": status,
         "n_arm_attempts_done": len(results) + len(errors),
         "n_arm_attempts_total": n_questions * n_arms,
         "summary": summarize(results) if results else {},

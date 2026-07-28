@@ -1,0 +1,218 @@
+{
+  "label": "subset",
+  "questions_path": "/Users/syenneti/Desktop/agenticProjects/09-multi-agent-debate/bench/questions.jsonl",
+  "n_questions": 6,
+  "status": "capped",
+  "n_arm_attempts_done": 18,
+  "n_arm_attempts_total": 18,
+  "summary": {
+    "single_shot": {
+      "n_questions": 4,
+      "accuracy": 0.75,
+      "total_tokens": 29233,
+      "avg_tokens_per_question": 7308.25,
+      "calibration": {
+        "high (>=0.7)": {
+          "n": 4,
+          "accuracy": 0.75
+        }
+      }
+    },
+    "self_consistency": {
+      "n_questions": 3,
+      "accuracy": 1.0,
+      "total_tokens": 34595,
+      "avg_tokens_per_question": 11531.666666666666,
+      "calibration": {
+        "high (>=0.7)": {
+          "n": 3,
+          "accuracy": 1.0
+        }
+      }
+    },
+    "debate": {
+      "n_questions": 4,
+      "accuracy": 1.0,
+      "total_tokens": 233065,
+      "avg_tokens_per_question": 58266.25,
+      "calibration": {
+        "high (>=0.7)": {
+          "n": 3,
+          "accuracy": 1.0
+        },
+        "low (<0.4)": {
+          "n": 1,
+          "accuracy": 1.0
+        }
+      }
+    }
+  },
+  "results": [
+    {
+      "question_id": "q01",
+      "category": "reasoning_puzzle",
+      "arm": "single_shot",
+      "answer": "$0.05",
+      "confidence": 1.0,
+      "correct": true,
+      "tokens": 2601,
+      "calls": 1,
+      "seconds": 38.67233541700989
+    },
+    {
+      "question_id": "q01",
+      "category": "reasoning_puzzle",
+      "arm": "self_consistency",
+      "answer": "$0.05",
+      "confidence": 1.0,
+      "correct": true,
+      "tokens": 9998,
+      "calls": 3,
+      "seconds": 149.77435199997853
+    },
+    {
+      "question_id": "q01",
+      "category": "reasoning_puzzle",
+      "arm": "debate",
+      "answer": "$0.05",
+      "confidence": 0.9,
+      "correct": true,
+      "tokens": 56835,
+      "calls": 9,
+      "seconds": 774.1573402080103
+    },
+    {
+      "question_id": "q02",
+      "category": "reasoning_puzzle",
+      "arm": "single_shot",
+      "answer": "Day 47",
+      "confidence": 1.0,
+      "correct": true,
+      "tokens": 4577,
+      "calls": 1,
+      "seconds": 61.78286641702289
+    },
+    {
+      "question_id": "q02",
+      "category": "reasoning_puzzle",
+      "arm": "self_consistency",
+      "answer": "Day 47",
+      "confidence": 1.0,
+      "correct": true,
+      "tokens": 15262,
+      "calls": 3,
+      "seconds": 237.3341036249767
+    },
+    {
+      "question_id": "q02",
+      "category": "reasoning_puzzle",
+      "arm": "debate",
+      "answer": "Day 47",
+      "confidence": 0.9,
+      "correct": true,
+      "tokens": 60893,
+      "calls": 9,
+      "seconds": 863.8355795830139
+    },
+    {
+      "question_id": "q09",
+      "category": "estimation",
+      "arm": "single_shot",
+      "answer": "Approximately 75 professional piano tuners",
+      "confidence": 0.85,
+      "correct": true,
+      "tokens": 15449,
+      "calls": 1,
+      "seconds": 960.0285098329769
+    },
+    {
+      "question_id": "q09",
+      "category": "estimation",
+      "arm": "debate",
+      "answer": "approximately 120",
+      "confidence": 0.175,
+      "correct": true,
+      "tokens": 75939,
+      "calls": 9,
+      "seconds": 1448.825894040987
+    },
+    {
+      "question_id": "q17",
+      "category": "pros_cons",
+      "arm": "single_shot",
+      "answer": "Job B",
+      "confidence": 1.0,
+      "correct": false,
+      "tokens": 6606,
+      "calls": 1,
+      "seconds": 282.8758479160024
+    },
+    {
+      "question_id": "q24",
+      "category": "code_review",
+      "arm": "self_consistency",
+      "answer": "Request Changes",
+      "confidence": 1.0,
+      "correct": true,
+      "tokens": 9335,
+      "calls": 3,
+      "seconds": 134.01948249997804
+    },
+    {
+      "question_id": "q24",
+      "category": "code_review",
+      "arm": "debate",
+      "answer": "Request Changes",
+      "confidence": 0.8400000000000001,
+      "correct": true,
+      "tokens": 39398,
+      "calls": 9,
+      "seconds": 495.78970854199724
+    }
+  ],
+  "errors": [
+    {
+      "question_id": "q10",
+      "arm": "debate",
+      "seconds": 1627.0162209580303,
+      "error": "Request timed out."
+    },
+    {
+      "question_id": "q17",
+      "arm": "self_consistency",
+      "seconds": 3505.0813076670165,
+      "error": "Request timed out."
+    },
+    {
+      "question_id": "q17",
+      "arm": "debate",
+      "seconds": 2094.4200167920208,
+      "error": "Request timed out."
+    },
+    {
+      "question_id": "q24",
+      "arm": "single_shot",
+      "seconds": 71.23219004197745,
+      "error": "Failed to produce a valid Proposal after 2 attempt(s). Last errors:\n- `reasoning`: Input should be a valid string, got ['1. The function constructs a SQL query using unsafe string concatenation.',... (string_type)"
+    },
+    {
+      "question_id": "q09",
+      "arm": "self_consistency",
+      "seconds": 1134.4522536669974,
+      "error": "Failed to produce a valid Proposal after 2 attempt(s). Last errors:\n- `self_confidence`: Field required, got {'answer': 'approximately 32', 'reasoning': \"Step 1: Restate question precise... (missing)"
+    },
+    {
+      "question_id": "q10",
+      "arm": "single_shot",
+      "seconds": 712.9490752080455,
+      "error": "Failed to produce a valid Proposal after 2 attempt(s). Last errors:\n- `reasoning`: Input should be a valid string, got ['Step 1: Estimate the interior volume of a standard empty school bus.', 'A t... (string_type)"
+    },
+    {
+      "question_id": "q10",
+      "arm": "self_consistency",
+      "seconds": 950.9379150830209,
+      "error": "Failed to produce a valid Proposal after 2 attempt(s). Last errors:\n- `reasoning`: Input should be a valid string, got ['Step 1: Calculate the volume of a single standard ping-pong ball. The diame... (string_type)"
+    }
+  ],
+  "capped_note": "Wall-clock capped by user after one retry round at a raised, measured 600s per-call timeout (see config.py REQUEST_TIMEOUT_SECONDS). The 7 remaining errored pairs are an honest recorded outcome, not silently dropped: 3 are still per-call timeouts even at 600s (q10/debate, q17/self_consistency, q17/debate), and 4 are a recurring schema-validation failure where the model returns Proposal.reasoning as a list of strings instead of a single string (q09/self_consistency, q10/single_shot, q10/self_consistency, q24/single_shot) -- see readme.html Learnings for both."
+}

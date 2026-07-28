@@ -1,0 +1,450 @@
+<title>Multi-Agent Debate — Live Transcript</title>
+<style>
+  :root {
+    --ground: #F7F8F5; --surface: #FFFFFF; --ink: #20262B; --muted: #5C666D;
+    --line: #DDE1DB; --analyst: #33628F; --skeptic: #96432F; --creative: #66508F;
+    --verdict: #2A6B4F; --verdict-soft: #E4EFE9; --chip-ink: #FFFFFF;
+    --track: #ECEEE9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #161A1D; --surface: #1E2428; --ink: #E5E8E4; --muted: #98A2A6;
+      --line: #323A40; --analyst: #6E9CC9; --skeptic: #C97B62; --creative: #9C85C9;
+      --verdict: #5FAE8C; --verdict-soft: #223A30; --chip-ink: #14181B;
+      --track: #2A3136;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #161A1D; --surface: #1E2428; --ink: #E5E8E4; --muted: #98A2A6;
+    --line: #323A40; --analyst: #6E9CC9; --skeptic: #C97B62; --creative: #9C85C9;
+    --verdict: #5FAE8C; --verdict-soft: #223A30; --chip-ink: #14181B;
+    --track: #2A3136;
+  }
+  :root[data-theme="light"] {
+    --ground: #F7F8F5; --surface: #FFFFFF; --ink: #20262B; --muted: #5C666D;
+    --line: #DDE1DB; --analyst: #33628F; --skeptic: #96432F; --creative: #66508F;
+    --verdict: #2A6B4F; --verdict-soft: #E4EFE9; --chip-ink: #FFFFFF;
+    --track: #ECEEE9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "Seravek", "Segoe UI", system-ui, sans-serif;
+    line-height: 1.55; font-size: 16px;
+  }
+  .wrap { max-width: 62rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; display: flex; flex-direction: column; gap: 2.75rem; }
+  .eyebrow { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 .9rem; }
+  h1 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-size: clamp(1.5rem, 3.4vw, 2.2rem); font-weight: 600; line-height: 1.3;
+    margin: 0 0 1.1rem; text-wrap: balance; max-width: 40ch;
+  }
+  .meta { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .meta span {
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: .74rem;
+    border: 1px solid var(--line); border-radius: 3px; padding: .22rem .55rem; color: var(--muted);
+    background: var(--surface);
+  }
+  .verdict-panel {
+    background: var(--verdict-soft); border: 1px solid var(--verdict); border-radius: 6px;
+    padding: 1.4rem 1.6rem; display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-start;
+  }
+  .verdict-answer { display: flex; flex-direction: column; gap: .3rem; min-width: 10rem; }
+  .verdict-answer .label { font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--verdict); font-weight: 600; }
+  .verdict-answer .value {
+    font-family: "Iowan Old Style", Palatino, Georgia, serif;
+    font-size: 3rem; font-weight: 700; color: var(--verdict); line-height: 1;
+  }
+  .verdict-body { flex: 1 1 24rem; display: flex; flex-direction: column; gap: .7rem; }
+  .verdict-facts { display: flex; flex-wrap: wrap; gap: 1.2rem; font-size: .85rem; color: var(--muted); }
+  .verdict-facts strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .conf-track { background: var(--track); border-radius: 99px; height: 8px; width: 11rem; overflow: hidden; display: inline-block; vertical-align: middle; }
+  .conf-fill { display: block; height: 100%; background: var(--verdict); width: 81%; }
+  .verdict-body p { margin: 0; max-width: 65ch; }
+  .personas-key { display: flex; flex-wrap: wrap; gap: .9rem; }
+  .key-item { display: flex; gap: .55rem; align-items: baseline; font-size: .84rem; color: var(--muted); }
+  .key-item .dot { width: .6rem; height: .6rem; border-radius: 50%; display: inline-block; transform: translateY(.05rem); }
+  .key-item strong { color: var(--ink); }
+  .analyst { --pc: var(--analyst); }
+  .skeptic { --pc: var(--skeptic); }
+  .creative { --pc: var(--creative); }
+  .dot { background: var(--pc); }
+  .round { display: flex; flex-direction: column; gap: 1.1rem; }
+  h2 {
+    font-family: "Iowan Old Style", Palatino, Georgia, serif; font-size: 1.3rem; font-weight: 600;
+    margin: 0; border-top: 1px solid var(--line); padding-top: 1.6rem; text-wrap: balance;
+  }
+  .round-no { color: var(--muted); font-weight: 400; margin-right: .4rem; }
+  h3 { font-size: .8rem; letter-spacing: .11em; text-transform: uppercase; color: var(--muted); margin: 1rem 0 0; font-weight: 600; }
+  .blind-note { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: .8rem; margin-left: .5rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--pc);
+    border-radius: 5px; padding: 1rem 1.1rem 1.1rem; display: flex; flex-direction: column; gap: .7rem;
+  }
+  .card-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .persona-chip {
+    background: var(--pc); color: var(--chip-ink); font-size: .74rem; font-weight: 700;
+    border-radius: 3px; padding: .2rem .5rem; letter-spacing: .04em; display: inline-flex; gap: .45rem; align-items: baseline;
+  }
+  .persona-chip .letter { font-weight: 400; opacity: .85; font-family: "SF Mono", Menlo, monospace; font-size: .7rem; }
+  .conf { margin-left: auto; font-size: .74rem; color: var(--muted); }
+  .conf strong { font-variant-numeric: tabular-nums; color: var(--ink); }
+  .stance { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; border: 1px solid var(--pc); color: var(--pc); border-radius: 3px; padding: .12rem .4rem; }
+  .answer { font-family: "Iowan Old Style", Palatino, Georgia, serif; font-size: 1.5rem; font-weight: 700; margin: 0; color: var(--pc); }
+  .reasoning {
+    margin: 0; white-space: pre-wrap; overflow-wrap: break-word; font-family: inherit; font-size: .86rem; color: var(--ink);
+    background: none; line-height: 1.5; overflow-x: auto;
+  }
+  .changes { margin: 0; font-size: .8rem; color: var(--muted); border-top: 1px dashed var(--line); padding-top: .6rem; }
+  .chg-label { text-transform: uppercase; letter-spacing: .08em; font-size: .68rem; color: var(--pc); font-weight: 700; margin-right: .3rem; }
+  .bars { display: flex; flex-direction: column; gap: .35rem; }
+  .bar-row { display: grid; grid-template-columns: 7rem 1fr 3.2rem; gap: .6rem; align-items: center; }
+  .bar-label { font-size: .74rem; color: var(--muted); }
+  .bar-track { background: var(--track); border-radius: 99px; height: 7px; overflow: hidden; }
+  .bar-fill { display: block; height: 100%; background: var(--pc); }
+  .bar-num { font-family: "SF Mono", Menlo, monospace; font-size: .72rem; font-variant-numeric: tabular-nums; color: var(--ink); text-align: right; }
+  .crit-text { margin: 0; font-size: .85rem; color: var(--muted); }
+  .vote-wrap { display: flex; flex-direction: column; gap: .6rem; }
+  .vote-wrap .vote { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+  .vote th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); padding: .55rem .8rem; border-bottom: 1px solid var(--line); font-weight: 600; }
+  .vote td { padding: .55rem .8rem; border-bottom: 1px solid var(--line); font-size: .88rem; }
+  .vote tr:last-child td { border-bottom: none; }
+  .vote td .dot { width: .55rem; height: .55rem; border-radius: 50%; display: inline-block; margin-right: .5rem; }
+  .vote th.num, .vote td.num { text-align: right; font-variant-numeric: tabular-nums; font-family: "SF Mono", Menlo, monospace; font-size: .82rem; }
+  .vote td.final { font-weight: 700; }
+  .vote .sub { color: var(--muted); font-size: .72rem; font-family: inherit; }
+  .vote tr.is-winner td { background: var(--verdict-soft); }
+  .win-mark { font-size: .66rem; text-transform: uppercase; letter-spacing: .09em; color: var(--verdict); border: 1px solid var(--verdict); border-radius: 3px; padding: .08rem .35rem; margin-left: .45rem; }
+  .vote-note { margin: 0; font-size: .78rem; color: var(--muted); max-width: 70ch; }
+  footer { border-top: 1px solid var(--line); padding-top: 1.2rem; font-size: .78rem; color: var(--muted); }
+  footer code { font-family: "SF Mono", Menlo, monospace; font-size: .74rem; }
+  @media (prefers-reduced-motion: no-preference) {
+    .bar-fill, .conf-fill { transition: width .6s ease; }
+  }
+</style>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Multi-Agent Debate · Project 09 · Live transcript — no cherry-picking</p>
+    <h1>“A bat and ball cost $1.10 total; the bat costs $1 more than the ball. What does the ball cost?”</h1>
+    <div class="meta">
+      <span>model qwen3.5:9b · local Ollama</span>
+      <span>2 rounds</span>
+      <span>55,825 tokens</span>
+      <span>3 personas + blind critic + deterministic vote</span>
+    </div>
+  </header>
+
+  <section class="verdict-panel">
+    <div class="verdict-answer">
+      <span class="label">Final answer</span>
+      <span class="value">$0.05</span>
+    </div>
+    <div class="verdict-body">
+      <div class="verdict-facts">
+        <span>confidence <strong>0.81</strong> <span class="conf-track"><span class="conf-fill"></span></span></span>
+        <span>winner <strong>Skeptic</strong></span>
+        <span><strong>No dissent — all three personas converged.</strong></span>
+      </div>
+      <p>The winning answer of $0.05 was selected because the Critic confirmed its mathematical correctness via reductio ad absurdum and robust constraint verification. The assessment notes that concrete mathematical steps are present despite meta-talk, ensuring uniqueness without logical errors or missed edge cases. With no dissent from other proposers and strong scores for reasoning quality, it stands as the clear winner requiring no modification.</p>
+    </div>
+  </section>
+
+  <section>
+    <h3>The three reasoning styles</h3>
+    <div class="personas-key">
+      <span class="key-item analyst"><span class="dot"></span><span><strong>Analyst</strong> — methodical · restates every constraint, shows explicit arithmetic</span></span>
+      <span class="key-item skeptic"><span class="dot"></span><span><strong>Skeptic</strong> — adversarial · hunts the intuitive trap and hidden assumptions</span></span>
+      <span class="key-item creative"><span class="dot"></span><span><strong>Creative</strong> — lateral · explores multiple structural angles before committing</span></span>
+    </div>
+  </section>
+
+  
+    <section class="round">
+      <h2><span class="round-no">Round 1</span> Independent proposals</h2>
+      <div class="grid">
+      <article class="card analyst">
+        <header class="card-head">
+          <span class="persona-chip">Analyst<span class="letter">A</span></span>
+          
+          <span class="conf">self-confidence <strong>1.00</strong></span>
+        </header>
+        <p class="answer">$0.05</p>
+        <pre class="reasoning">1. Define variables: Let B be the cost of the ball and Bat be the cost of the bat.
+2. List constraints given in the problem:
+   a) Total cost equation: B + Bat = $1.10
+   b) Relationship constraint: Bat = B + $1.00
+3. Substitute the relationship (Bat = B + 1) into the total cost equation:
+   B + (B + 1) = 1.10
+4. Combine like terms to simplify the equation:
+   2 * B + 1 = 1.10
+5. Subtract $1 from both sides of the equation:
+   2 * B = 0.10
+6. Divide by 2 to solve for B (the cost of the ball):
+   B = 0.05
+7. Verify: If Ball is $0.05, Bat is $1.05 ($0.05 + $1). Total is $1.10.</pre>
+        
+      </article>
+      <article class="card skeptic">
+        <header class="card-head">
+          <span class="persona-chip">Skeptic<span class="letter">B</span></span>
+          
+          <span class="conf">self-confidence <strong>1.00</strong></span>
+        </header>
+        <p class="answer">$0.05</p>
+        <pre class="reasoning">(1) Intuitive Answer: $0.10 (often derived by subtracting difference from total directly). (2) Constraint Check: Sum constraint is Bat+Ball=1.10; Difference constraint is Bat-Ball=1. If Ball=$0.10, then Bat must be 1.10 to satisfy &#x27;Bat costs $1 more&#x27;. This results in a Total of $1.20 ($0.10 + $1.10), which violates the Sum constraint of $1.10. (3) Hidden Assumptions: The intuitive error assumes linear subtraction without accounting that Bat price includes both base cost and difference relative to Ball, inflating total sum incorrectly upon naive estimation.</pre>
+        
+      </article>
+      <article class="card creative">
+        <header class="card-head">
+          <span class="persona-chip">Creative<span class="letter">C</span></span>
+          
+          <span class="conf">self-confidence <strong>0.95</strong></span>
+        </header>
+        <p class="answer">$0.05</p>
+        <pre class="reasoning">I explored two structural angles: (1) Linear System Algebraic Modeling, defining variables for Ball and Bat to solve via substitution; and (2) Decomposition by Surplus Isolation, mentally separating the bat&#x27;s fixed premium from total spending capacity before distributing remainder equally among base units. I selected Approach 1 because it rigorously eliminates cognitive biases inherent in intuitive estimation (such as estimating ball cost at $0.10), providing a definitive verification path that ensures precision regardless of unit complexity.</pre>
+        
+      </article></div>
+      <h3>Critic review <span class="blind-note">blind — proposals seen only as A/B/C, scored against a versioned rubric</span></h3>
+      <div class="grid">
+      <article class="card crit analyst">
+        <header class="card-head">
+          <span class="persona-chip">Proposal A<span class="letter">Analyst</span></span>
+          <span class="conf">critic total <strong>30/30</strong></span>
+        </header>
+        <div class="bars">
+          <div class="bar-row">
+            <span class="bar-label">correctness</span>
+            <span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>
+            <span class="bar-num">10/10</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">completeness</span>
+            <span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>
+            <span class="bar-num">10/10</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">reasoning</span>
+            <span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>
+            <span class="bar-num">10/10</span>
+          </div></div>
+        <p class="crit-text">This proposal provides a standard algebraic derivation with explicit verification steps. The logic is transparent and mathematically sound for this problem type. It fully addresses the question by defining variables, setting up equations, solving them step-by-step, and verifying the result against constraints.</p>
+      </article>
+      <article class="card crit skeptic">
+        <header class="card-head">
+          <span class="persona-chip">Proposal B<span class="letter">Skeptic</span></span>
+          <span class="conf">critic total <strong>27/30</strong></span>
+        </header>
+        <div class="bars">
+          <div class="bar-row">
+            <span class="bar-label">correctness</span>
+            <span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>
+            <span class="bar-num">10/10</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">completeness</span>
+            <span class="bar-track"><span class="bar-fill" style="width:80%"></span></span>
+            <span class="bar-num">8/10</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">reasoning</span>
+            <span class="bar-track"><span class="bar-fill" style="width:90%"></span></span>
+            <span class="bar-num">9/10</span>
+          </div></div>
+        <p class="crit-text">The answer is correct and the constraint-check logic used to debunk intuitive errors is sound. However, completeness is slightly lower than A because it focuses on refuting the wrong answer ($0.10$) rather than explicitly deriving the positive solution steps algebraically in this text block (it implies uniqueness via constraints but doesn&#x27;t show $2B=0.1$). Reasoning quality remains high due to sound logical structure, though less direct demonstration of calculation.</p>
+      </article>
+      <article class="card crit creative">
+        <header class="card-head">
+          <span class="persona-chip">Proposal C<span class="letter">Creative</span></span>
+          <span class="conf">critic total <strong>24/30</strong></span>
+        </header>
+        <div class="bars">
+          <div class="bar-row">
+            <span class="bar-label">correctness</span>
+            <span class="bar-track"><span class="bar-fill" style="width:90%"></span></span>
+            <span class="bar-num">9/10</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">completeness</span>
+            <span class="bar-track"><span class="bar-fill" style="width:70%"></span></span>
+            <span class="bar-num">7/10</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">reasoning</span>
+            <span class="bar-track"><span class="bar-fill" style="width:80%"></span></span>
+            <span class="bar-num">8/10</span>
+          </div></div>
+        <p class="crit-text">The answer is correct. Reasoning quality and completeness are lower because the proposal describes two methods but does not explicitly execute or show mathematical steps for either in this text block (it claims a verification path exists without displaying it). The meta-reasoning about cognitive bias is sound, but lack of demonstrated calculation reduces transparency compared to A/B.</p>
+      </article></div>
+      <h3>Vote</h3>
+      
+      <div class="vote-wrap">
+        <table class="vote">
+          <thead><tr><th>Persona</th><th class="num">Critic total</th><th class="num">Agreement</th><th class="num">Final score</th></tr></thead>
+          <tbody>
+        <tr class="analyst is-winner">
+          <td><span class="dot"></span>Analyst <span class="win-mark">winner</span></td>
+          <td class="num">30</td>
+          <td class="num">×1.2 <span class="sub">(2/2 peers agree)</span></td>
+          <td class="num final">36.0</td>
+        </tr>
+        <tr class="skeptic">
+          <td><span class="dot"></span>Skeptic </td>
+          <td class="num">27</td>
+          <td class="num">×1.2 <span class="sub">(2/2 peers agree)</span></td>
+          <td class="num final">32.4</td>
+        </tr>
+        <tr class="creative">
+          <td><span class="dot"></span>Creative </td>
+          <td class="num">24</td>
+          <td class="num">×1.2 <span class="sub">(2/2 peers agree)</span></td>
+          <td class="num final">28.8</td>
+        </tr></tbody>
+        </table>
+        <p class="vote-note">Deterministic math over critic scores — no LLM votes. Clear winner: score leads the nearest <em>disagreeing</em> competitor; unanimous agreement reads as consensus, never a split.</p>
+      </div>
+    </section>
+    <section class="round">
+      <h2><span class="round-no">Round 2</span> Rebuttal — each proposer saw the others’ answers and critiques</h2>
+      <div class="grid">
+      <article class="card analyst">
+        <header class="card-head">
+          <span class="persona-chip">Analyst<span class="letter">A</span></span>
+          <span class="stance stance-defend">defend</span>
+          <span class="conf">self-confidence <strong>1.00</strong></span>
+        </header>
+        <p class="answer">$0.05</p>
+        <pre class="reasoning">1. Evaluate original proposal: The algebraic derivation (B + Bat = 1.10, Bat = B + 1) is mathematically correct and verified.
+2. Analyze Critic feedback: The critic assigned high scores for correctness_risk, completeness, and reasoning_quality to the original proposal, explicitly stating logic is transparent and sound.
+3. Compare with Peers: Peer Proposal B refutes intuitive errors but lacks explicit algebra steps; Peer C describes methods without execution. Their critics noted lower completeness/reasoning quality compared to A (original).
+4. Conclusion: The original answer ($0.05) remains correct, supported by the critic&#x27;s validation and superior step-by-step transparency relative to peers.
+5. Decision: No revision needed.</pre>
+        <p class="changes"><span class="chg-label">Changes</span> None; original reasoning was validated as complete and sound compared to peer proposals which lacked explicit calculation steps in their text.</p>
+      </article>
+      <article class="card skeptic">
+        <header class="card-head">
+          <span class="persona-chip">Skeptic<span class="letter">B</span></span>
+          <span class="stance stance-defend">defend</span>
+          <span class="conf">self-confidence <strong>1.00</strong></span>
+        </header>
+        <p class="answer">$0.05</p>
+        <pre class="reasoning">The original answer ($0.05$) is mathematically correct and adheres to the Skeptic procedure (1-3): I identified the intuitive trap ($0.10), checked constraints explicitly showing $Ball=0.10 \rightarrow Total=1.20$, which violates Sum=$1.10$. The Critic&#x27;s feedback regarding &#x27;completeness&#x27; compared to Proposal A reflects a stylistic preference for direct algebraic derivation over reductio ad absurdum; however, my method effectively hunts hidden assumptions (the intuitive calculation) and verifies uniqueness via constraint violation in this domain. No logical errors or missed edge cases were found that necessitate changing the answer.</pre>
+        <p class="changes"><span class="chg-label">Changes</span> None; Critic acknowledges logic is sound despite stylistic difference.</p>
+      </article>
+      <article class="card creative">
+        <header class="card-head">
+          <span class="persona-chip">Creative<span class="letter">C</span></span>
+          <span class="stance stance-revise">revise</span>
+          <span class="conf">self-confidence <strong>1.00</strong></span>
+        </header>
+        <p class="answer">$0.05</p>
+        <pre class="reasoning">(1) Angle 1: Direct Algebraic Modeling (Define B for Ball, Bat=B+1; Solve Linear Equation). Structure 2: Intuitive Heuristic Check (Subtract Difference from Total -&gt; $0.1$ vs Verify Sum Constraint). Chosen Approach 1 because Peer A&#x27;s Critique noted my original proposal lacked explicit &#x27;verification steps&#x27; required to reach Completeness=High Score, thus I will demonstrate the substitution process explicitly here.</pre>
+        <p class="changes"><span class="chg-label">Changes</span> Updated reasoning field to include explicit calculation derivation matching Peer A&#x27;s transparency standards (which improved Quality/Risk Metrics). Original proposal only described methods; now executed steps for full verifiable completeness per critique feedback.</p>
+      </article></div>
+      <h3>Critic review <span class="blind-note">blind — proposals seen only as A/B/C, scored against a versioned rubric</span></h3>
+      <div class="grid">
+      <article class="card crit analyst">
+        <header class="card-head">
+          <span class="persona-chip">Proposal A<span class="letter">Analyst</span></span>
+          <span class="conf">critic total <strong>24/30</strong></span>
+        </header>
+        <div class="bars">
+          <div class="bar-row">
+            <span class="bar-label">correctness</span>
+            <span class="bar-track"><span class="bar-fill" style="width:90%"></span></span>
+            <span class="bar-num">9/10</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">completeness</span>
+            <span class="bar-track"><span class="bar-fill" style="width:70%"></span></span>
+            <span class="bar-num">7/10</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">reasoning</span>
+            <span class="bar-track"><span class="bar-fill" style="width:80%"></span></span>
+            <span class="bar-num">8/10</span>
+          </div></div>
+        <p class="crit-text">Answer is correct ($0.05) and algebraic derivation cited holds up to verification (B + Bat = 1.10). However, reasoning relies on meta-commentary about &#x27;Critic feedback&#x27; and peers not present in this turn&#x27;s context, reducing independent justification quality slightly compared to direct constraint checks.</p>
+      </article>
+      <article class="card crit skeptic">
+        <header class="card-head">
+          <span class="persona-chip">Proposal B<span class="letter">Skeptic</span></span>
+          <span class="conf">critic total <strong>27/30</strong></span>
+        </header>
+        <div class="bars">
+          <div class="bar-row">
+            <span class="bar-label">correctness</span>
+            <span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>
+            <span class="bar-num">10/10</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">completeness</span>
+            <span class="bar-track"><span class="bar-fill" style="width:80%"></span></span>
+            <span class="bar-num">8/10</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">reasoning</span>
+            <span class="bar-track"><span class="bar-fill" style="width:90%"></span></span>
+            <span class="bar-num">9/10</span>
+          </div></div>
+        <p class="crit-text">Answer is correct ($0.05). Reasoning explicitly verifies constraints via reductio ad absurdum (Ball=0.10 -&gt; Total=1.20), providing strong independent verification of correctness in this turn text. Meta-talk present but mathematical steps are concrete and robust.</p>
+      </article>
+      <article class="card crit creative">
+        <header class="card-head">
+          <span class="persona-chip">Proposal C<span class="letter">Creative</span></span>
+          <span class="conf">critic total <strong>20/30</strong></span>
+        </header>
+        <div class="bars">
+          <div class="bar-row">
+            <span class="bar-label">correctness</span>
+            <span class="bar-track"><span class="bar-fill" style="width:90%"></span></span>
+            <span class="bar-num">9/10</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">completeness</span>
+            <span class="bar-track"><span class="bar-fill" style="width:60%"></span></span>
+            <span class="bar-num">6/10</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">reasoning</span>
+            <span class="bar-track"><span class="bar-fill" style="width:50%"></span></span>
+            <span class="bar-num">5/10</span>
+          </div></div>
+        <p class="crit-text">Answer is correct ($0.05). Reasoning describes methods (&#x27;Angle 1&#x27;, &#x27;Structure 2&#x27;) but claims to demonstrate substitution without showing numerical execution in the provided text block (only lists angles/methods), lowering reasoning quality for this turn&#x27;s evidence compared to peers who cite equations or constraint checks directly.</p>
+      </article></div>
+      <h3>Vote</h3>
+      
+      <div class="vote-wrap">
+        <table class="vote">
+          <thead><tr><th>Persona</th><th class="num">Critic total</th><th class="num">Agreement</th><th class="num">Final score</th></tr></thead>
+          <tbody>
+        <tr class="skeptic is-winner">
+          <td><span class="dot"></span>Skeptic <span class="win-mark">winner</span></td>
+          <td class="num">27</td>
+          <td class="num">×1.2 <span class="sub">(2/2 peers agree)</span></td>
+          <td class="num final">32.4</td>
+        </tr>
+        <tr class="analyst">
+          <td><span class="dot"></span>Analyst </td>
+          <td class="num">24</td>
+          <td class="num">×1.2 <span class="sub">(2/2 peers agree)</span></td>
+          <td class="num final">28.8</td>
+        </tr>
+        <tr class="creative">
+          <td><span class="dot"></span>Creative </td>
+          <td class="num">20</td>
+          <td class="num">×1.2 <span class="sub">(2/2 peers agree)</span></td>
+          <td class="num final">24.0</td>
+        </tr></tbody>
+        </table>
+        <p class="vote-note">Deterministic math over critic scores — no LLM votes. Clear winner: score leads the nearest <em>disagreeing</em> competitor; unanimous agreement reads as consensus, never a split.</p>
+      </div>
+    </section>
+
+  <footer>
+    Captured from a real end-to-end run against local <code>qwen3.5:9b</code> — committed at
+    <code>09-multi-agent-debate/transcripts/bat_and_ball_live.json</code>. All three personas independently avoided the
+    classic $0.10 trap in round 1; the debate machinery still did its work — blind rubric scoring, rebuttals, and a
+    deterministic vote that shifted the lead from Analyst to Skeptic on round-2 evidence quality.
+  </footer>
+</div>
