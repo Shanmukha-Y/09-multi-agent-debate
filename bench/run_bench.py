@@ -92,6 +92,16 @@ def run_arm(arm: str, question_text: str) -> arena.ArenaResult:
     raise ValueError(f"unknown arm: {arm}")
 
 
+def dedupe_errors(errors: list[dict]) -> list[dict]:
+    """Collapse to at most one error entry per (question_id, arm) pair,
+    keeping the LATEST entry for any pair that appears more than once
+    (e.g. a schema failure on one run, then a timeout on a resume's retry)."""
+    deduped: dict[tuple[str, str], dict] = {}
+    for e in errors:
+        deduped[(e["question_id"], e["arm"])] = e  # later entries win
+    return list(deduped.values())
+
+
 CheckpointCallback = Callable[[list[QuestionResult], list[dict]], None]
 
 
@@ -133,11 +143,7 @@ def run_bench(
     """
     results: list[QuestionResult] = list(initial_results or [])
     already_done = {(r.question_id, r.arm) for r in results}
-
-    deduped_initial: dict[tuple[str, str], dict] = {}
-    for e in initial_errors or []:
-        deduped_initial[(e["question_id"], e["arm"])] = e  # later entries win
-    errors: list[dict] = list(deduped_initial.values())
+    errors: list[dict] = dedupe_errors(initial_errors or [])
 
     for i, q in enumerate(questions, 1):
         if verbose:
@@ -296,6 +302,16 @@ def main(args: argparse.Namespace) -> None:
 
     def checkpoint(results: list[QuestionResult], errors: list[dict]) -> None:
         _write_checkpoint(out_path, label, args.questions, len(questions), len(ARMS), results, errors, "in_progress")
+
+    # Write an immediate in_progress checkpoint before any new work happens.
+    # Without this, a --resume run's output file keeps whatever `status` the
+    # PREVIOUS run left behind (typically "complete") until the first
+    # genuinely new attempt fires the on_result callback -- skipped,
+    # already-done pairs don't trigger it. That stale "complete" reads as a
+    # false completion signal to anyone polling the file early in a resume
+    # (a monitoring script, a teammate, a human), when the run has actually
+    # just started retrying failures.
+    checkpoint(initial_results, dedupe_errors(initial_errors))
 
     results, errors = run_bench(
         questions, on_result=checkpoint, initial_results=initial_results, initial_errors=initial_errors
