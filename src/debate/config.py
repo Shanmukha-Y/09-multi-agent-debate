@@ -29,7 +29,24 @@ NUMERIC_AGREEMENT_TOLERANCE = 0.01  # relative tolerance for "same" numeric answ
 # Calls are made strictly sequentially (never asyncio.gather'd) and given a
 # generous per-call timeout so one slow generation on a 9B model doesn't
 # starve other processes hammering the same server.
-REQUEST_TIMEOUT_SECONDS = float(os.environ.get("DEBATE_REQUEST_TIMEOUT", "180"))
+#
+# 180s was too tight and measurably so, not just in theory: a live subset
+# bench run against an otherwise-IDLE dedicated server (no contention) still
+# timed out 7 of 18 arm attempts, every one of them an estimation question in
+# a baseline arm. Server logs during that run show qwen3.5:9b's step-by-step
+# persona prompts driving single completions past 10,000+ decoded tokens on
+# open-ended Fermi-estimate questions (observed up to ~11,300 tokens on one
+# call, still climbing when it was cut off) -- at this server's measured
+# ~65-68 tok/s, that alone is ~170s of pure generation before accounting for
+# prompt processing or queueing, i.e. it was landing right on the 180s wall.
+# self_consistency's higher temperature (0.7 vs personas' base 0.3) makes
+# this worse: more sampling diversity also means more rambling, discursive
+# reasoning chains on questions that don't have a short closed-form answer.
+# 600s gives calls like that comfortable headroom (~40,000 decoded tokens'
+# worth at this server's measured throughput) while still being a real
+# ceiling -- a call that needs longer than that is an honest, informative
+# failure, not an artifact of an arbitrarily tight timeout.
+REQUEST_TIMEOUT_SECONDS = float(os.environ.get("DEBATE_REQUEST_TIMEOUT", "600"))
 TRANSPORT_MAX_ATTEMPTS = 3
 
 DB_PATH = os.environ.get("DEBATE_DB_PATH", "debates.db")

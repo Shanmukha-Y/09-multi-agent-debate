@@ -238,3 +238,42 @@ class TestResume:
         results, errors = load_checkpoint(str(tmp_path / "does_not_exist.json"))
         assert results == []
         assert errors == []
+
+    def test_duplicate_stale_errors_for_same_pair_are_deduped_on_seed(self, monkeypatch):
+        # Real incident: q09/self_consistency failed on the original crashed
+        # run (schema exhaustion) and again on the first resume (timeout),
+        # stacking two entries for the same pair in the checkpoint file.
+        stale_schema_error = {"question_id": "q09", "arm": "self_consistency", "seconds": 5.0, "error": "schema exhaustion"}
+        stale_timeout_error = {"question_id": "q09", "arm": "self_consistency", "seconds": 600.0, "error": "Request timed out."}
+
+        def fake_run_arm(arm: str, question_text: str):
+            # This run's own attempt also fails, so both stale entries plus
+            # this new one collapse to exactly one entry for the pair.
+            raise RuntimeError("still failing")
+
+        monkeypatch.setattr(run_bench_module, "run_arm", fake_run_arm)
+
+        results, errors = run_bench(
+            [{"id": "q09", "category": "estimation", "question": "?", "match_type": "numeric_range",
+              "reference_low": 0, "reference_high": 100, "subset": True}],
+            arms=("self_consistency",), verbose=False,
+            initial_errors=[stale_schema_error, stale_timeout_error],
+        )
+
+        matching = [e for e in errors if e["question_id"] == "q09" and e["arm"] == "self_consistency"]
+        assert len(matching) == 1
+        assert matching[0]["error"] == "still failing"  # the fresh attempt's error, not either stale one
+
+    def test_duplicate_stale_errors_dedupe_even_without_a_retry_attempt(self):
+        # Same scenario, but the pair isn't even in this run's question set
+        # (e.g. only retrying a different arm) -- seeding alone must dedupe.
+        stale_schema_error = {"question_id": "q09", "arm": "self_consistency", "seconds": 5.0, "error": "schema exhaustion"}
+        stale_timeout_error = {"question_id": "q09", "arm": "self_consistency", "seconds": 600.0, "error": "Request timed out."}
+
+        results, errors = run_bench(
+            [], arms=(), verbose=False, initial_errors=[stale_schema_error, stale_timeout_error],
+        )
+
+        assert len(errors) == 1
+        # The LATER entry (timeout) wins over the earlier (schema) one.
+        assert errors[0]["error"] == "Request timed out."

@@ -123,10 +123,21 @@ def run_bench(
     (`initial_errors`) are NOT skipped -- a transient failure deserves
     another attempt, not a permanent skip, so they're carried forward into
     the returned `errors` list but re-attempted like anything else.
+
+    At most one error entry is ever kept per (question_id, arm) pair. A
+    pair that fails across multiple resumes (e.g. a schema failure on the
+    first run, then a timeout on a retry) previously stacked a fresh entry
+    on top of the stale one every time -- `initial_errors` is deduped down
+    to the latest entry per pair up front, and a fresh failure during this
+    run replaces rather than appends to any existing entry for that pair.
     """
     results: list[QuestionResult] = list(initial_results or [])
-    errors: list[dict] = list(initial_errors or [])
     already_done = {(r.question_id, r.arm) for r in results}
+
+    deduped_initial: dict[tuple[str, str], dict] = {}
+    for e in initial_errors or []:
+        deduped_initial[(e["question_id"], e["arm"])] = e  # later entries win
+    errors: list[dict] = list(deduped_initial.values())
 
     for i, q in enumerate(questions, 1):
         if verbose:
@@ -143,6 +154,7 @@ def run_bench(
                 correct = grade(arena_result.answer, q)
             except Exception as exc:  # noqa: BLE001 - one bad arm shouldn't kill the whole bench run
                 elapsed = time.monotonic() - t0
+                errors = [e for e in errors if (e["question_id"], e["arm"]) != (q["id"], arm)]
                 errors.append({"question_id": q["id"], "arm": arm, "seconds": elapsed, "error": str(exc)})
                 if verbose:
                     console.print(f"  [red]{arm} failed on {q['id']}: {exc}[/red]")
