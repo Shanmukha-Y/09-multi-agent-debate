@@ -49,4 +49,4 @@ The committed benchmark is a small, interrupted subset with unequal completion c
 - **A repeated schema failure is now handled without hiding the evidence.** The recorded run contains four failures where `Proposal.reasoning` was a JSON array. The message contract now losslessly joins non-empty string arrays and tests that the first attempt succeeds, but the historical benchmark file has not been rewritten or retroactively rescored.
 - **Checkpointing paid off.** Two external process terminations and one operator cap lost only the in-flight attempt because every completed arm was persisted.
 
-See [`readme.html`](readme.html) for the full methodology, benchmark table, cost analysis, and caveats.
+See [`readme.html`](readme.html) for the original methodology and benchmark artifact. The historical JSON/HTML results are intentionally unchanged; this root README is authoritative for the post-run schema-normalization fix and its limitations.
